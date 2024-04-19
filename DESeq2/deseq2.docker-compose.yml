@@ -1,0 +1,19 @@
+#########################
+# Docker compose DESeq2 #
+#########################
+version: '3'
+
+services:
+    deseq2-cli:
+        image: deseq2:1.0
+        build:
+            context: ./
+            dockerfile: deseq2_dockerfile
+        entrypoint: [ "/bin/bash", "-l", "-c" ]
+        container_name: deseq2
+        restart: "no"
+        volumes:
+            - /home1/data/STARK/output/repository:/STARK/output/repository:rw
+            - /home1/data/STARK/output/depository:/STARK/output/depository:rw
+            - /home1/BAS/lavauxt/input:/STARK/input
+            - /home1/data/STARK/databases:/STARK/databases:rw
