@@ -33,7 +33,7 @@ RUN mamba install -y -c conda-forge -c bioconda -c biobuilds \
 	bioconductor-genefilter  bioconductor-reportingtools  bioconductor-regionreport \
 	bioconductor-pcaexplorer  bioconductor-apeglm  bioconductor-dose \
 	bioconductor-pathview  bioconductor-clusterprofiler  bioconductor-org.hs.eg.db  r-ggnewscale \
-	r-seurat  r-monocle3  r-harmony  \
+	r-seurat  r-monocle3  r-harmony bioconductor-alevinqc \
 	&& mamba clean -afy
 
 

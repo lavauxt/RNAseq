@@ -1,0 +1,75 @@
+##########################################################################
+# Config Yaml Version:     1.0
+# Description:             Yaml file to run Snakefile Salmon count module
+##########################################################################
+# DEV version 1 : 05/03/2023
+# Authoring : Thomas LAVAUX
+
+################## Directories and variables ##################
+# Name of the module = {serviceName} from listener.py/launcher.py
+serviceName: "ALEVIN"
+# Specify a DATE_TIME value (for rerun)
+DATE_TIME: ""
+# Output directory
+OUTPUT_DIR: "/output/repository"
+# If not empty will copy the results in this folder
+depository: "/output/depository"
+# Default path to the input datas == {run} from listener.py/launcher.py
+run: ""
+
+# Bed file
+BED_FILE: ""
+# Genes file
+GENES_FILE: ""
+# Transcripts file
+TRANSCRIPTS_FILE: ""
+# List genes
+LIST_GENES: ""
+
+# Files to index into the dictionary depending on extension (endwith)
+EXT_INDEX_LIST : [".R1.fastq.gz",".R2.fastq.gz"]
+# List of files extension to process
+PROCESS_FILE: [".R1.fastq.gz",".R2.fastq.gz"]
+# How to copy input files (bam, bai, cram) : ls or leave empty (it will rsync files or index for bai from bam)
+PROCESS_CMD: 'ls'
+# Only analyse validation.bam/cram files
+VALIDATION_ONLY: False
+# Append an aligner name if no empty (from sample.bam to sample.aligner_name.bam)
+ALIGNER_NAME:
+
+# Samples list exclusion (not to be analysed) ; exclude if startwith, case insensitive
+EXCLUDE_SAMPLE: ['POOL_', 'BlcADN', 'blanc', 'BlcPCR', 'blcPCR', 'Z_NTC', 'NTC', 'Blc']
+# Sample filter : only analyse those samples
+FILTER_SAMPLE: []
+
+# Extension files to copy after pipeline success
+# using brace extension, remove space between extensions
+INCLUDE_RSYNC: "{'*.sf','/*'}"
+# Extensions files to copy after pipeline failure
+INCLUDE_LOG_RSYNC: "{'*Failed.txt','*.log','*.err'}"
+
+# Search parameters
+RECURSIVE_SEARCH: False
+SEARCH_ARGUMENT: "*/*"
+
+# Path of the template (template is serviceName_template.html)
+TEMPLATE_DIR: "/app/template"
+# For result html report, list of extensions to report
+RESULT_EXT_LIST: ['.sf']
+
+################## Tools parameters ##################
+# Default path to a FASTA file with .fasta reference genome (hg19/hg38 for ex)
+REFGENOMEFA_PATH: "/databases/salmon//GRCm39.Ensembl110.gencodevm33.salmon.index/GRCm39.primary_assembly.genome.fa.gz"
+################## Salmon ##################
+# FASTP params
+FASTP_GLOBALS_PARAMS: "--disable_quality_filtering --disable_trim_poly_g --disable_length_filtering --disable_adapter_trimming"
+FASTP_COMPRESSION: 1
+FASTP_TRIM: "" # --trim_front2=5 --trim_tail2=5
+
+# Setup threads for alevin (workflow.cores or a integer)
+THREADS: 4
+# For alevin quantification fastq mode, path to the index file
+SALMON_INDEX: "/databases/salmon/GRCm39.Ensembl110.gencodevm33.salmon.index"
+ALEVIN_GENE_TABLE: "/databases/salmon/GRCm39.Ensembl110.gencodevm33.salmon.index/txp2gene.tsv"
+MISC_SALMON_OPTIONS: "--chromiumv3"
+ALEVIN_LIBRARY: "ISR" # also for chromiumv3
