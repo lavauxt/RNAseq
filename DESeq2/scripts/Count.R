@@ -35,11 +35,6 @@ suppressWarnings(library(tximport))
 suppressWarnings(library(tidyverse))
 suppressWarnings(library(gdata))
 
-## Proxy ##
-Sys.setenv(http_proxy="http://hux144_proxy:proxysurf@cyclope:8080")
-Sys.setenv(https_proxy="http://hux144_proxy:proxysurf@cyclope:8080")
-
-
 ######Parsing input options and setting defaults########
 option_list<-list(
 	make_option('--input',default='data', help='Folder were the data are stored',dest='datafolder'),
@@ -676,6 +671,8 @@ gseaKEGG_results <- gseaKEGG_results %>%
 
 setwd(paste(FolderOutput ,"/KEGG/", sep = ""))
 try(purrr::map(1:length(gseaKEGG_results$ID), get_kegg_plots))
+
+# clusterProfiler::GSEA
 
 # The SPIA (Signaling Pathway Impact Analysis) tool can be used to integrate the lists of differentially expressed genes, their fold changes, and pathway
 # topology to identify affected pathways.

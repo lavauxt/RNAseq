@@ -1,0 +1,55 @@
+##############################################################
+# Module :             DESeq2
+# Submodule :          DEV
+# Services :           cli
+# Version :            1.0
+# Description:         Dockerfile to build container image DESeq2
+##############################################################
+
+# PROD version 1 : 20/09/2023
+# Authoring : Thomas LAVAUX
+
+# Ubuntu based (minimal focal)
+FROM condaforge/mambaforge
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Need to set timezone for R
+ENV TZ=Europe/Paris
+RUN ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime
+RUN echo "$TZ" > /etc/timezone
+
+# Update and install some tools
+RUN apt-get update  --fix-missing && \
+	apt-get install -y unzip vim rsync
+
+# Mamba install 
+RUN mamba install -y -c conda-forge -c bioconda -c biobuilds \
+	snakemake pandas samtools \
+	salmon~=1.10.3 \
+	&& mamba clean -afy
+
+
+# To activate the environnement use mamba activate rtools
+# To deactivate use mamba deactivate
+# in snakemake add conda: "rtools"
+RUN mamba create -n rtools -y -c conda-forge -c bioconda -c biobuilds \
+	r-tidyverse r-ggplot2  r-devtools r-ggnewscale \
+	r-ggrepel r-sessioninfo r-ashr r-rcolorbrewer r-optparse r-gdata \
+	bioconductor-deseq2  bioconductor-tximport \
+	bioconductor-annotationhub  bioconductor-ensembldb  bioconductor-annotationforge bioconductor-org.hs.eg.db \
+	r-pheatmap bioconductor-degreport r-heatmaply bioconductor-enhancedvolcano \
+	bioconductor-genefilter  bioconductor-reportingtools bioconductor-regionreport \
+	bioconductor-pcaexplorer bioconductor-apeglm  bioconductor-dose \
+	bioconductor-pathview  bioconductor-clusterprofiler \
+	r-seurat  bioconductor-alevinqc~=1.18.0  \
+	&& mamba clean -afy
+
+# r-monocle3  r-harmony # other SnRNAseq tools
+# bioconductor-spia # alternative to GSEA
+
+# Copy applications files (/app)
+COPY ./ /app
+COPY ./*docker* /app/config/
+
+WORKDIR "/app"
+ENTRYPOINT [ "/bin/bash", "-l", "-c" ]

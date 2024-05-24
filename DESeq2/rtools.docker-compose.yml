@@ -1,19 +1,19 @@
 #########################
-# Docker compose DESeq2 #
+# Docker compose rtools #
 #########################
 version: '3'
 
 services:
-    deseq2-cli:
-        image: deseq2:1.0
+    rtools:
+        image: rtools:1.0
         build:
             context: ./
-            dockerfile: deseq2_dockerfile
+            dockerfile: rtools_dockerfile
         entrypoint: [ "/bin/bash", "-l", "-c" ]
-        container_name: deseq2
+        container_name: rtools
         restart: "no"
+        command: "'while true; do sleep 60; done'"
         volumes:
             - /home1/data/STARK/output/repository:/output/repository:rw
-            - /home1/data/STARK/output/depository:/output/depository:rw
             - /home1/BAS/lavauxt/input:/input
             - /home1/data/STARK/databases:/databases:rw
