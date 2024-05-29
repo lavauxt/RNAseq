@@ -1,10 +1,10 @@
-library(alevinQC)
+suppressWarnings(library(alevinQC))
 suppressWarnings(library(optparse))
 
 option_list<-list(
 	make_option('--input',default='data', help='Folder were the data are stored',dest='baseDir'),
 	make_option('--output',default='results', help='Folder were to save the results',dest='outputDir'),
-	make_option('--sample',default='', help='Sample name',dest='sample')
+	make_option('--sample',default='default', help='Sample name',dest='sample')
 )
 opt<-parse_args(OptionParser(option_list=option_list))
 
@@ -18,8 +18,8 @@ alevinQCReport(baseDir = DataInput,
             sampleId = sampleId, 
             outputFile = paste(sampleId,"_alevinReport.html"), 
             outputFormat = "html_document",
-            outputDir = outputDir, forceOverwrite = TRUE)
+            outputDir = FolderOutput, forceOverwrite = TRUE)
 
 
-### Output the versions of all tools used in the DE analysis
+### Output the versions of all tools used in the analysis
 sessionInfo()
