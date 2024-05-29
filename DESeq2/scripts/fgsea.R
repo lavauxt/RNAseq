@@ -9,12 +9,14 @@
 
 library(tidyverse)
 library(reshape2)
+library(dplyr)
+library(tools)
+library(htmlwidgets)
 library(maditr)
 library(ggplot2)
 library(fgsea)
 library(DT)
 library(ComplexHeatmap)
-
 
 ######Parsing input options and setting defaults########
 # Load DE analyse from DESeq2
@@ -28,6 +30,8 @@ opt<-parse_args(OptionParser(option_list=option_list))
 FolderOutput=opt$resultfolder
 DataInput=opt$datafile
 Pathways=opt$pathway
+
+gmt_file_name <- file_path_sans_ext(basename(Pathways))
 
 # Load datas
 res <- read_tsv(paste(DataInput))
@@ -56,34 +60,51 @@ fgseaResTidy <- fgseaRes %>%
   as_tibble() %>%
   arrange(desc(NES))
 
-# Show in a nice table:
+# Show in a html table
 fgseaResTidy %>% 
   dplyr::select(-leadingEdge, -ES) %>% 
   arrange(padj) %>% 
   DT::datatable()
+# Save in html
+output_file <- paste("GSEA_Table_with", gmt_file_name, ".html")
+saveWidget(datatable_object, file = output_file)
 
+# Filtered results by padj value
 fgseaResTidy_filtered <- fgseaResTidy %>% filter(padj < 0.05)
 
 ggplot(fgseaResTidy_filtered, aes(reorder(pathway, NES), NES)) +
   geom_col(aes(fill=padj<0.05)) +
   coord_flip() +
   labs(x="Pathway", y="Normalized Enrichment Score",
-       title="Should be the name of the gmt file") + 
+       title= paste("Results for GMT file: ", gmt_file_name)) + 
   theme_minimal()
 
-
+# Table by gene
 gene.in.pathway <- pathways.hallmark %>% 
   enframe("pathway", "gene") %>% 
   unnest(cols = c(gene)) %>% 
   inner_join(res, by="gene")
 
-# Enrichment plot for a specific target gene set : should iterate through all gene set in the geneset file
-plotEnrichment(pathway = pathways.hallmark[["should iterate through all gene set"]], ranks)
+# Enrichment plot for the significative target gene set
+plot_function <- function(gene_set_name) {
+  gene_set <- pathways.hallmark[[gene_set_name]]
+  
+  # Create the enrichment plot
+  plot <- plotEnrichment(pathway = gene_set, stats = ranks) +
+    ggtitle(paste("Enrichment Plot for: ", gene_set_name))
+  
+  # Print the plot
+  print(plot)
+}
 
+# Apply the function to each gene set in pathways.hallmark
+lapply(names(pathways.hallmark), plot_function)
 
+output_file <- paste("GSEA_Table_with", gmt_file_name, ".pdf")
+pdf(output_file)
 plotGseaTable(pathways.hallmark[fgseaRes$pathway[fgseaRes$padj < 0.05]], ranks, fgseaRes, 
                 gseaParam=0.5)
-
+dev.off()
 
 #________ Heatmap Plot_____________#
 # still not working as intended
