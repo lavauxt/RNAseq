@@ -30,7 +30,7 @@
 # salmon index -t gentrome.fa.gz -d decoys.txt -p 12 -i salmon_index --gencode
 # eventually use --keepDuplicates for isoform analysis
 # to generate the transcript/gene table
-# zgrep "^>" gentrome.fa.gz| cut -d "|" -f 1,6 --output-delimiter=$'\t' - | sed 's/[>"gene_symbol:"]//g' > txp2gene.tsv
+# zgrep "^>" gentrome.fa.gz| cut -d "|" -f 1,6 --output-delimiter=$'\t' - | sed 's/>//g; s/gene_symbol://g; s/"//g' > txp2gene.tsv
 ########################################################################################################
 
 import os
@@ -155,7 +155,8 @@ ruleorder: copy_fastq > cramtobam > copy_bam > samtools_fastq
 
 rule all:
 	input:
-		expand(f"{resultDir}/tmp/{{sample}}.success",sample=sample_list)
+		#expand(f"{resultDir}/tmp/{{sample}}.success",sample=sample_list),
+		expand(f"{resultDir}/tmp/{{sample}}/alevin/{{sample}}_alevinReport.html", sample=sample_list)
 
 
 rule help:
@@ -258,11 +259,11 @@ rule alevin:
 		salmon alevin --dumpFeatures -l {params.library_type} -1 {input.fastqR1} -2 {input.fastqR2} {params.misc_options} -i {params.index} -p {params.threads} -o {params.alevindir} --tgMap {params.gene_map} && touch {output}
 		"""
 
-#rule alevinQC:
-#input: f"{resultDir}/tmp/{{sample}}
-#output: f"{resultDir}/tmp/{{sample}}
-#conda: "rtools"
-#shell : """ Rscript AlevinQC.R --input {input} --output {output} --sample {wildcards.sample} """
+rule alevinQC:
+	input: f"{resultDir}/tmp/{{sample}}/alevin/quants_mat.gz"
+	output: f"{resultDir}/tmp/{{sample}}/alevin/{{sample}}_alevinReport.html"
+	conda: "rtools"
+	shell: """ Rscript AlevinQC.R --input {input} --output {output} --sample {wildcards.sample} """
 
 onstart:
 	shell(f"touch {os.path.join(outputDir, f'{serviceName}Running.txt')}")

@@ -1,4 +1,5 @@
 suppressWarnings(library(alevinQC))
+suppressWarnings(library(eds))
 suppressWarnings(library(optparse))
 
 option_list<-list(

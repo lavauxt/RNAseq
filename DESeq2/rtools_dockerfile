@@ -35,7 +35,7 @@ RUN mamba install -y -c conda-forge -c bioconda -c biobuilds \
 RUN mamba create -n rtools -y -c conda-forge -c bioconda -c biobuilds \
 	r-tidyverse r-ggplot2  r-devtools r-ggnewscale \
 	r-ggrepel r-sessioninfo r-ashr r-rcolorbrewer r-optparse r-gdata \
-	bioconductor-deseq2  bioconductor-tximport \
+	bioconductor-deseq2  bioconductor-tximport bioconductor-eds \
 	bioconductor-annotationhub  bioconductor-ensembldb  bioconductor-annotationforge bioconductor-org.hs.eg.db \
 	r-pheatmap bioconductor-degreport r-heatmaply bioconductor-enhancedvolcano \
 	bioconductor-genefilter  bioconductor-reportingtools bioconductor-regionreport \
