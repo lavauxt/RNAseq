@@ -40,7 +40,7 @@ RUN mamba create -n rtools -y -c conda-forge -c bioconda -c biobuilds \
 	r-pheatmap bioconductor-degreport r-heatmaply bioconductor-enhancedvolcano \
 	bioconductor-genefilter  bioconductor-reportingtools bioconductor-regionreport \
 	bioconductor-pcaexplorer bioconductor-apeglm  bioconductor-dose \
-	bioconductor-pathview  bioconductor-clusterprofiler \
+	bioconductor-pathview  bioconductor-clusterprofiler bioconductor-spia\
 	r-seurat  bioconductor-alevinqc~=1.18.0  \
 	&& mamba clean -afy
 

@@ -8,7 +8,7 @@
 # 01/12/2022 : add KEGG patwhay graphs - TL
 # 08/12/2022 : add Ensembl update package (v107), improve files naming & graphs (GO) - TL
 # 19/01/2022 : add covar option & update SPIA PlotP to be more robust ; refactor some code - TL
-# 02/02/2023 : add effect option for the statistic model, sample table filter samples list from files ; some variabilisation & options added - TL
+# 02/02/2023 : add interaction option for the statistic model, sample table filter samples list from files ; some variabilisation & options added - TL
 
 # Sources for reference
 # http://master.bioconductor.org/packages/release/workflows/vignettes/rnaseqGene/inst/doc/rnaseqGene.html#the-deseqdataset-object-sample-information-and-the-design-formula
@@ -48,8 +48,8 @@ option_list<-list(
 	make_option('--gene',default='CD180', help='Gene name for plot construction',dest='gene'),
 	make_option('--topplot',default=30, help='Number of top gene taken into account for top plots',dest='topgene'),
 	make_option('--topheatmap',default=50, help='Number of top genes taken into account for interactive heatmap',dest='topheat'),
-	make_option('--covar',default='', help='Covariable to add to the statistic model',dest='covar'),
-	make_option('--eff',default='', help='Effect to add to the statistic model, separated by a :',dest='eff'),
+	make_option('--covar',default='', help='Covariable to add to the statistic model (ext batch, cell)',dest='covar'),
+	make_option('--inter',default='', help='Interaction used by the statistic model, separated by a : (ex conditon:cell)',dest='inter'),
 	make_option('--shrink',default='ashr', help='Shrinking algorithm for DE analysis, choose between normal, ashr (default) or apeglm',dest='shrink'),
 	make_option('--ensembl',default='./database/EnsDb.Hsapiens.v107.tar.gz', help='Ensembl package file in .tar.gz format',dest='ensembl')
 )
@@ -67,7 +67,7 @@ geneplot=opt$gene
 topgene=opt$topgene
 topheatgene=opt$topheat
 covariable=opt$covar
-effect=opt$eff
+interaction=opt$inter
 shrink_method=opt$shrink
 ensembl_package=opt$ensembl
 
@@ -189,10 +189,10 @@ if (covariable == ''){
 	DESeq2Model <-  paste("~ ",Condition2Compare," + ",covariable)
 }
 
-if (effect == ''){
+if (interaction == ''){
 	print("No effect")
 }else{
-	DESeq2Model <-  paste("~ ",Condition2Compare," + ",covariable," + ",effect)
+	DESeq2Model <-  paste("~ ",Condition2Compare," + ",covariable," + ",interaction)
 }
 
 print("Modele is")
@@ -290,14 +290,25 @@ dev.off()
 # comparison <- c(Condition2Compare, level_to_compare, base_level) 
 
 comparison_raw <- resultsNames(dds)[-1]
-comparison <- list(c(comparison_raw))
-write.table(comparison, paste(FolderOutput ,"/Log/Possible_Models.txt", sep = ""), sep="\t", quote=FALSE, row.names = FALSE, col.names = TRUE)
+
+write.table(comparison_raw, paste(FolderOutput ,"/Log/Possible_Models.txt", sep = ""), sep="\t", quote=FALSE, row.names = FALSE, col.names = FALSE)
 # Specify contrast for comparison of interest
 # Output results of Wald test for contrast of interest
 # ex : condition_S_LPS_vs_NS cell_LLC_vs_LB conditionS_LPS.cellLLC or comparison <- list(c("condition_S_LPS_vs_NS","cell_LLC_vs_LB"))
-# TODO rewrite the comparison to include constrast depending on the variables we specify
+if (!is.null(interaction)) {
+  selected_pattern <- paste0(Condition2Compare,level_to_compare)
+  # Find indices where pattern matches
+  indices <- grep(selected_pattern, comparison_raw, ignore.case = TRUE, value = FALSE)
+  # Subset based on indices
+  selected_values <- comparison_raw[indices]
+  # Create a list
+  comparison <- list(selected_values = selected_values)
+} else {
+  comparison <- list(c(comparison_raw))
+}
 
-write.table(comparison, paste(FolderOutput ,"/Log/Final_Model.txt", sep = ""), sep="\t", quote=FALSE, row.names = FALSE, col.names = TRUE)
+write.table(comparison, paste(FolderOutput ,"/Log/Final_Model.txt", sep = ""), sep="\t", quote=FALSE, row.names = FALSE, col.names = FALSE)
+
 res <- results(dds, contrast = comparison , alpha = 0.05)
 # Save unshrunken results
 res_tableOE_unshrunken <- res 
