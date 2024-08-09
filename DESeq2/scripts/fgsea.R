@@ -7,16 +7,22 @@
 # https://stephenturner.github.io/deseq-to-fgsea/
 # https://github.com/hamidghaedi/Enrichment-Analysis
 
-library(tidyverse)
-library(reshape2)
-library(dplyr)
-library(tools)
-library(htmlwidgets)
-library(maditr)
-library(ggplot2)
-library(fgsea)
-library(DT)
-library(ComplexHeatmap)
+# Guide for gmt sets
+# https://www.gsea-msigdb.org/gsea/msigdb/human/collections.jsp#H
+# https://data.broadinstitute.org/gsea-msigdb/msigdb/release/7.5.1/
+suppressPackageStartupMessages({
+  library(tidyverse)
+  library(reshape2)
+  library(dplyr)
+  library(tools)
+  library(htmlwidgets)
+  library(maditr)
+  library(ggplot2)
+  library(fgsea)
+  library(DT)
+  library(ComplexHeatmap)
+  library(optparse)
+})
 
 ######Parsing input options and setting defaults########
 # Load DE analyse from DESeq2
@@ -31,6 +37,9 @@ FolderOutput=opt$resultfolder
 DataInput=opt$datafile
 Pathways=opt$pathway
 
+dir.create(FolderOutput)
+
+# Load gmt
 gmt_file_name <- file_path_sans_ext(basename(Pathways))
 
 # Load datas
@@ -39,9 +48,7 @@ res <- read_tsv(paste(DataInput))
 # Load the pathways into a named list
 pathways.hallmark <- gmtPathways(paste(Pathways))
 
-# We use log fold change
-# https://support.bioconductor.org/p/129277/
-
+# We use log fold change cf https://support.bioconductor.org/p/129277/
 res2 <- res %>% 
   dplyr::select(gene, log2FoldChange) %>% 
   na.omit() %>% 
@@ -61,16 +68,16 @@ fgseaResTidy <- fgseaRes %>%
   arrange(desc(NES))
 
 # Show in a html table
-fgseaResTidy %>% 
+datatable_object <- fgseaResTidy %>% 
   dplyr::select(-leadingEdge, -ES) %>% 
   arrange(padj) %>% 
   DT::datatable()
 # Save in html
 output_file <- paste("GSEA_Table_with", gmt_file_name, ".html")
-saveWidget(datatable_object, file = output_file)
+saveWidget(datatable_object, file = paste(FolderOutput, output_file))
 
 # Filtered results by padj value
-fgseaResTidy_filtered <- fgseaResTidy %>% filter(padj < 0.05)
+fgseaResTidy_filtered <- fgseaResTidy %>% filter(padj < 0.001)
 
 ggplot(fgseaResTidy_filtered, aes(reorder(pathway, NES), NES)) +
   geom_col(aes(fill=padj<0.05)) +
@@ -85,26 +92,41 @@ gene.in.pathway <- pathways.hallmark %>%
   unnest(cols = c(gene)) %>% 
   inner_join(res, by="gene")
 
-# Enrichment plot for the significative target gene set
+# Filter pathways based on padj < 0.001
+filtered_pathways <- fgseaResTidy %>%
+  filter(padj < 0.001) %>%
+  pull(pathway)
+
+# Subset the pathways.hallmark to include only the filtered pathways
+filtered_pathways_hallmark <- pathways.hallmark[filtered_pathways]
+
+# Plot function
 plot_function <- function(gene_set_name) {
-  gene_set <- pathways.hallmark[[gene_set_name]]
+  gene_set <- filtered_pathways_hallmark[[gene_set_name]]
   
   # Create the enrichment plot
   plot <- plotEnrichment(pathway = gene_set, stats = ranks) +
     ggtitle(paste("Enrichment Plot for: ", gene_set_name))
   
-  # Print the plot
-  print(plot)
+  output_file <- paste0(FolderOutput, gsub(" ", "_", gene_set_name), ".pdf")
+  
+  # Save the plot
+  ggsave(output_file, plot=plot, width=8, height=6)
 }
 
 # Apply the function to each gene set in pathways.hallmark
-lapply(names(pathways.hallmark), plot_function)
+lapply(names(filtered_pathways_hallmark), plot_function)
 
 output_file <- paste("GSEA_Table_with", gmt_file_name, ".pdf")
-pdf(output_file)
-plotGseaTable(pathways.hallmark[fgseaRes$pathway[fgseaRes$padj < 0.05]], ranks, fgseaRes, 
+pdf(paste(FolderOutput, output_file))
+plotGseaTable(pathways.hallmark[fgseaRes$pathway[fgseaRes$padj < 0.001]], ranks, fgseaRes, 
                 gseaParam=0.5)
 dev.off()
+
+### Output the versions of all tools used in the analysis
+sessionInfo()
+
+stop('End script')
 
 #________ Heatmap Plot_____________#
 # still not working as intended
@@ -125,7 +147,7 @@ h.dat[is.na(h.dat)] = as.numeric(0)
 
 row_names <- rownames(h.dat)
 
-# keep those genes with 3  or more occurnes
+# keep those genes with 3  or more occurences
 h.dat_numeric <- data.frame(lapply(h.dat, as.numeric))
 row_sums <- rowSums(h.dat_numeric)
 result <- data.frame(RowName = row_names, RowSum = row_sums)
@@ -231,3 +253,6 @@ draw(hmapGSEA + haGenes,
     heatmap_legend_side = 'right',
     annotation_legend_side = 'right')
 dev.off()
+
+### Output the versions of all tools used in the analysis
+sessionInfo()

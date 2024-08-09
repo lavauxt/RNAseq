@@ -18,7 +18,6 @@
 
 # Multifactor Designs in DESeq2 check https://www.youtube.com/watch?v=X6p3E-QTcUc
 
-
 # In DTE, differential expression between conditions is assessed at the individual transcript level, while in DTU the relative expression of the isoforms of a gene are compared between conditions; i.e. a DTU analysis aims at discovering differences in the proportions of the expressed isoforms of a gene
 
 # DTU/DTE http://bioconductor.org/packages/release/workflows/vignettes/rnaseqDTU/inst/doc/rnaseqDTU.html
@@ -28,12 +27,14 @@
 # https://www.bioconductor.org/packages/devel/bioc/vignettes/tximeta/inst/doc/tximeta.html
 
 # Load libraries
-suppressWarnings(library(ggplot2))
-suppressWarnings(library(optparse))
-suppressWarnings(library(stringr))
-suppressWarnings(library(tximport))
-suppressWarnings(library(tidyverse))
-suppressWarnings(library(gdata))
+suppressPackageStartupMessages({
+library(ggplot2)
+library(optparse)
+library(stringr)
+library(tximport)
+library(tidyverse)
+library(gdata)
+})
 
 ######Parsing input options and setting defaults########
 option_list<-list(
@@ -48,7 +49,7 @@ option_list<-list(
 	make_option('--gene',default='CD180', help='Gene name for plot construction',dest='gene'),
 	make_option('--topplot',default=30, help='Number of top gene taken into account for top plots',dest='topgene'),
 	make_option('--topheatmap',default=50, help='Number of top genes taken into account for interactive heatmap',dest='topheat'),
-	make_option('--covar',default='', help='Covariable to add to the statistic model (ext batch, cell)',dest='covar'),
+	make_option('--covar',default='', help='Covariable to add to the statistic model (ex batch, cell)',dest='covar'),
 	make_option('--inter',default='', help='Interaction used by the statistic model, separated by a : (ex conditon:cell)',dest='inter'),
 	make_option('--shrink',default='ashr', help='Shrinking algorithm for DE analysis, choose between normal, ashr (default) or apeglm',dest='shrink'),
 	make_option('--ensembl',default='./database/EnsDb.Hsapiens.v107.tar.gz', help='Ensembl package file in .tar.gz format',dest='ensembl')
@@ -107,7 +108,7 @@ write.table((tximport_file_list), paste(FolderOutput ,"/Log/Tximport_Final list.
 ## Create a dataframe with transcript ID & gene ID with ENSEMBL ref
 install.packages(paste(ensembl_package), type = "source", repos = NULL)
 package_name <- gsub(".*/(.*?)\\.tar\\.gz", "\\1", ensembl_package)
-suppressMessages(library(paste(package_name),character.only=TRUE))
+suppressPackageStartupMessages(library(paste(package_name),character.only=TRUE))
 mv(from = package_name, to = "edb") 
 # Reformat
 k <- keys(edb, keytype = "TXNAME")
@@ -153,31 +154,21 @@ if (!sampletabletest) {
   stop()
 }
 
-#sampletest <- all(colnames(txi$counts) == rownames(meta))
-#if (!sampletest) {
-#	print("Check your samples files (missing file or wrong name compared to the sample table)")
-#	stop()
-#}
-
-#sampletabletest <- all(colnames(txi$counts) == meta$sample)
-#if (!sampletabletest) {
-#	print("Check the sample list in the sample table (missing file or wrong name compared to the sample table)")
-#	stop()
-#}
-
 # Library
-suppressWarnings(library(DESeq2))
-suppressWarnings(library(ggrepel))
-suppressWarnings(library(RColorBrewer))
-suppressWarnings(library(pheatmap))
-suppressWarnings(library(DEGreport))
-suppressWarnings(library(heatmaply))
-suppressWarnings(library(EnhancedVolcano))
-suppressWarnings(library(genefilter))
-suppressWarnings(library(ReportingTools))
-suppressWarnings(library(regionReport))
-suppressWarnings(library(pcaExplorer))
-suppressWarnings(library(apeglm))
+suppressPackageStartupMessages({
+library(DESeq2)
+library(ggrepel)
+library(RColorBrewer)
+library(pheatmap)
+library(DEGreport)
+library(heatmaply)
+library(EnhancedVolcano)
+library(genefilter)
+library(ReportingTools)
+library(regionReport)
+library(pcaExplorer)
+library(apeglm)
+})
 
 ### Step 2 ### Create the dds object
 # design is the name(s) of the column(s) of the sample_table with the info on the groups/conditions you want to compare
@@ -204,9 +195,7 @@ dds <- DESeqDataSetFromTximport(txi, colData = meta, design = as.formula(DESeq2M
 # TODO condition should be a variable
 dds$condition <- relevel( dds$condition, paste(base_level))
 
-
 ## Pre-filtering the dataset (dds object) before DE analysis
-
 ## Delete row if 0 counts for all samples
 keep <- rowSums(counts(dds)) >= 1 # Keep if sum of row values >= 1 
 dds <- dds[keep,]
@@ -504,12 +493,13 @@ dev.off()
 ## 1 # Gene Ontology (GO) over-representation analysis with clusterProfiler
 
 # Load libraries
-suppressWarnings(library(DOSE))
-suppressWarnings(library(pathview))
-suppressWarnings(library(clusterProfiler))
-suppressWarnings(library(org.Hs.eg.db))
-suppressWarnings(library(ggnewscale))
-
+suppressPackageStartupMessages({
+library(DOSE)
+library(pathview)
+library(clusterProfiler)
+library(org.Hs.eg.db)
+library(ggnewscale)
+})
 ## Ensembl and EntrezID are needed for this functional analysis
 # Create a gene-level dataframe 
 annotations_ahb <- genes(edb, return.type = "data.frame")  %>%
@@ -687,7 +677,7 @@ try(purrr::map(1:length(gseaKEGG_results$ID), get_kegg_plots))
 
 # The SPIA (Signaling Pathway Impact Analysis) tool can be used to integrate the lists of differentially expressed genes, their fold changes, and pathway
 # topology to identify affected pathways.
-suppressWarnings(library(SPIA))
+suppressPackageStartupMessages(library(SPIA))
 
 # Significant genes is a vector of fold changes where the names are ENTREZ gene IDs. The background set is a vector of all the genes represented on the platform.
 background_entrez <- res_entrez$entrezid
@@ -802,4 +792,4 @@ dev.off()
 
 
 ### Output the versions of all tools used in the DE analysis
-#sessionInfo()
+sessionInfo()
