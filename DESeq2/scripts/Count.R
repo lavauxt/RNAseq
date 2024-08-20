@@ -49,8 +49,8 @@ option_list<-list(
 	make_option('--gene',default='CD180', help='Gene name for plot construction',dest='gene'),
 	make_option('--topplot',default=30, help='Number of top gene taken into account for top plots',dest='topgene'),
 	make_option('--topheatmap',default=50, help='Number of top genes taken into account for interactive heatmap',dest='topheat'),
-	make_option('--covar',default='', help='Covariable to add to the statistic model (ex batch, cell)',dest='covar'),
-	make_option('--inter',default='', help='Interaction used by the statistic model, separated by a : (ex conditon:cell)',dest='inter'),
+	make_option('--covar',default=NULL, help='Covariable to add to the statistic model (ex batch, cell)',dest='covar'),
+	make_option('--inter',default=NULL, help='Interaction used by the statistic model, separated by a : (ex conditon:cell)',dest='inter'),
 	make_option('--shrink',default='ashr', help='Shrinking algorithm for DE analysis, choose between normal, ashr (default) or apeglm',dest='shrink'),
 	make_option('--ensembl',default='./database/EnsDb.Hsapiens.v107.tar.gz', help='Ensembl package file in .tar.gz format',dest='ensembl')
 )
@@ -174,13 +174,14 @@ library(apeglm)
 # design is the name(s) of the column(s) of the sample_table with the info on the groups/conditions you want to compare
 # Need to figure out how to allow complex design like ~ cell+condition+cell:condition
 
-if (covariable == ''){
+if (is.null(covariable)) {
+  print("No covarialbe")
 	DESeq2Model <-  paste("~ ",Condition2Compare)
 }else{
 	DESeq2Model <-  paste("~ ",Condition2Compare," + ",covariable)
 }
 
-if (interaction == ''){
+if (is.null(interaction)) {
 	print("No effect")
 }else{
 	DESeq2Model <-  paste("~ ",Condition2Compare," + ",covariable," + ",interaction)
@@ -217,7 +218,16 @@ rld <- rlog(dds, blind=TRUE)
 
 # PCA uses the top 500 most variable genes to determine the similarity of the samples
 pdf(file = paste(FolderOutput ,"PCA_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 9, height = 7)
-pcaplot(rld, intgroup= Condition2Compare, text_labels = TRUE, ellipse = TRUE, ntop = 500 , title = "PCA plot using the top 500 variable genes")
+#pcaplot(rld, intgroup= Condition2Compare, text_labels = TRUE, ellipse = TRUE, ntop = 500 , title = "PCA plot using the top 500 variable genes")
+# Generate PCA plot without text labels first
+pca_plot <- pcaplot(rld, intgroup = Condition2Compare, text_labels = FALSE, ellipse = TRUE, ntop = 500, title = "PCA plot using the top 500 variable genes")
+# Add custom labels using ggrepel to avoid overlaps
+pca_plot <- pca_plot + 
+  geom_point(size = 3) + 
+  geom_text_repel(aes(label = rownames(colData(rld))), size = 3, max.overlaps = Inf)
+# Ensure the legend is included
+pca_plot <- pca_plot + theme(legend.position = "right")
+print(pca_plot)
 dev.off()
 
 # Extract the rlog matrix from the object and compute pairwise correlation values
@@ -292,12 +302,19 @@ if (!is.null(interaction)) {
   selected_values <- comparison_raw[indices]
   # Create a list
   comparison <- list(selected_values = selected_values)
+  print('Values in model with interaction')
+  print(selected_pattern)
+  print(indices)
+  print(selected_values)
 } else {
   comparison <- list(c(comparison_raw))
+   print('Values in model without interaction')
+  print(comparison)
 }
 
 write.table(comparison, paste(FolderOutput ,"/Log/Final_Model.txt", sep = ""), sep="\t", quote=FALSE, row.names = FALSE, col.names = FALSE)
 
+# Compute res woith contrast selected
 res <- results(dds, contrast = comparison , alpha = 0.05)
 # Save unshrunken results
 res_tableOE_unshrunken <- res 
