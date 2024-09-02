@@ -35,6 +35,7 @@ import glob
 import pandas as pd
 import json
 import csv
+import logging
 from shutil import copy2
 from datetime import datetime
 from itertools import product
@@ -42,7 +43,7 @@ from collections import defaultdict
 from jinja2 import Environment, FileSystemLoader
 
 ################## Configuration file ##################
-configfile: "/snakefile/salmon_default.yaml"
+configfile: "/app/config/snakefile/salmon_default.yaml"
 
 ####################### FUNCTIONS #####################
 def parse_samplesheet(samplesheet_path):
@@ -78,9 +79,13 @@ def getSampleInfos(samplesheet_path, exclude_samples):
 	
 	return result_dict
 
-def populate_dictionary(dictionary, samples_list, extensions_list, files_list, pattern_include=None, pattern_exclude=None, split_index=0):
+def populate_dictionary(samples_list, extensions_list, files_list, pattern_include=None, pattern_exclude=None, split_index=0):
+	
+	dictionary = defaultdict(dict)
+
 	for sample in samples_list:
 		for ext in extensions_list:
+			found = False
 			for file in files_list:
 				file_parts = os.path.basename(file).split(".")
 				
@@ -92,17 +97,34 @@ def populate_dictionary(dictionary, samples_list, extensions_list, files_list, p
 				if file_base != sample or not os.path.basename(file).endswith(ext):
 					continue
 
-				if pattern_exclude and pattern_exclude in file:
+				if pattern_exclude and any(exclude in file for exclude in pattern_exclude):
 					continue
 
 				if pattern_include and pattern_include not in file:
 					continue
 
 				dictionary.setdefault(sample, {})[ext] = file
+				found = True
+				break  # Stop after the first match
+
+			if not found:
+				dictionary.setdefault(sample, {})[ext] = None
+	
+	return dictionary
 
 
-def filter_files(files_list, filter_in=None, filter_out=None):
-	return [file_name for file_name in files_list if (not filter_in or filter_in in file_name) and (not filter_out or filter_out not in file_name)]
+def filter_files(files_list, filter_in=None, filter_out=None, extensions=None):
+	filtered_files = []
+
+	for file_name in files_list:
+		if extensions and any(file_name.endswith(ext) for ext in extensions):
+			if filter_out and filter_out in file_name:
+				continue  # Skip files with both the specified extension and substring
+			if filter_in and filter_in not in file_name:
+				continue  # Skip files that do not contain the specified substring
+		filtered_files.append(file_name)
+
+	return filtered_files
 
 			
 def find_item_in_dict(sample_list, ext_list, dictionary, include_ext, exclude_ext=None):
@@ -113,28 +135,21 @@ def find_item_in_dict(sample_list, ext_list, dictionary, include_ext, exclude_ex
 		for ext in ext_list:
 			try:
 				items = dictionary.get(sample, {}).get(ext, [])
-				if include_ext in items and (exclude_ext is None or exclude_ext not in items):
-					if os.path.exists(items) and os.path.getsize(items) != 0:
-						search_result = items
+				if items is not None:
+					if include_ext in items and (exclude_ext is None or exclude_ext not in items):
+						if os.path.exists(items) and os.path.getsize(items) != 0:
+							search_result = items
 			except KeyError as e:
 				print(f"KeyError encountered: {e}")
 	
 	return search_result
 
-def searchfiles(directory, search_arg, recursive_arg):
-	""" Function to search all files in a directory, adding a search arguement append to the directory and a recursive_search options (True/False) """
-	return sorted(filter(os.path.isfile, glob.glob(directory + search_arg, recursive=recursive_arg)))
-
-def log_file(logfile, text, sep, items_list=None, items=None):
-	""" Function to log a variable value or a list of values into a log file """
-	os.makedirs(os.path.dirname(logfile), exist_ok=True)
-	with open(logfile, 'a+') as f:
-		f.write(f"{text}{sep}")
-		if items_list:
-			for item in items_list:
-				f.write(f"{str(item) if item != '' else 'None'}{sep}")
-		else:
-			f.write(f"{str(items) if items != '' else 'None'}{sep}")
+def searchfiles(directory, search_args, recursive_arg):
+	""" Function to search all files in a directory with multiple search patterns and an option for recursive search """
+	results = []
+	for search_arg in search_args:
+		results.extend(filter(os.path.isfile, glob.glob(directory + search_arg, recursive=recursive_arg)))
+	return sorted(results)
 
 def extractlistfromfiles(file_list, ext_list, sep, position):
 	""" Function for creating list from a file list, with a specific extension, a separator and the position of the string we want to extract """
@@ -144,11 +159,9 @@ def replace_path(file_paths, old_substring, new_substring):
 	return [path.replace(old_substring, new_substring).lstrip("/") for path in file_paths]
 
 def generate_html_report(result_dict, run_name, service_name, sample_list, template_name, output_file='report.html'):
-	# Set up Jinja2 environment
 	env = Environment(loader=FileSystemLoader(config['TEMPLATE_DIR']))
 	template = env.get_template(template_name)
 
-	# Render the template with the provided data
 	rendered_html = template.render(
 		runDict=result_dict,
 		runName=run_name,
@@ -156,7 +169,6 @@ def generate_html_report(result_dict, run_name, service_name, sample_list, templ
 		sample_list=sample_list
 	)
 
-	# Save the rendered HTML to the output file
 	with open(output_file, 'w') as f:
 		f.write(rendered_html)
 
@@ -169,19 +181,14 @@ runName = os.path.basename(os.path.normpath(config['run']))
 date_time = config['DATE_TIME'] if config['DATE_TIME'] else datetime.now().strftime("%Y%m%d-%H%M%S")
 resultDir = f"/app/res/{runName}/{date_time}"
 outputDir = config['OUTPUT_DIR'] if config['OUTPUT_DIR'] else config['run']
+
+depotDir = config['DEPOT_DIR']
+if config['DEPOT_DIR'] == "depository":
+	depotDir = outputDir.replace("repository", "depository")
+
 directories = [resultDir, outputDir]
-
-if config['depository']:
-	try:
-		config['GROUP_NAME'] = os.path.normpath(config['run']).split('/')[4]
-		config['APP_NAME'] = os.path.normpath(config['run']).split('/')[5]
-	except IndexError: 
-		# Handle the case when index 4 or 5 doesn't exist in the split list
-		config['GROUP_NAME'] = 'UNKNOWN'
-		config['APP_NAME'] = 'UNKNOWN'
-	depotDir = f"{config['depository']}/{config['GROUP_NAME']}/{config['APP_NAME']}/{runName}"
+if depotDir:  # Ensure depotDir is not an empty string
 	directories.append(depotDir)
-
 for directory in directories:
 	os.makedirs(directory, exist_ok=True)
 
@@ -200,15 +207,14 @@ if config['FILTER_SAMPLE']:
 	sample_list = list(config['FILTER_SAMPLE'])
 
 # For validation analyse bam will be sample.aligner.validation.bam, so we append .validation to all the aligner strings
-if config['VALIDATION_ONLY']:
-	filter_files(files_list, filter_in='validation')
+if config['VALIDATION_ONLY'] == True:
+	filtered_files = filter_files(files_list, filter_in='validation', extensions=config['PROCESS_FILE'])
 	append_aligner = '.validation'
 	aligner_list = [sub + append_aligner for sub in aligner_list]
 else:
-	filter_files(files_list, None ,filter_out='validation')
+	filtered_files = filter_files(files_list, None ,filter_out='validation', extensions=config['PROCESS_FILE'])
 
-runDict = defaultdict(dict)
-populate_dictionary(runDict, sample_list, config['EXT_INDEX_LIST'], files_list, None, 'validation')
+runDict = populate_dictionary(sample_list, config['EXT_INDEX_LIST'], filtered_files, None, None)
 print(dict(runDict))
 
 # Find bed file (Design)
@@ -219,6 +225,10 @@ config['GENES_FILE'] = config['GENES_FILE'] or find_item_in_dict(sample_list, co
 config['LIST_GENES'] = config['LIST_GENES'] or find_item_in_dict(sample_list, config['EXT_INDEX_LIST'], runDict, '.list.genes', '.list.transcripts')
 # Find transcripts files (NM)
 config['TRANSCRIPTS_FILE'] = config['TRANSCRIPTS_FILE'] or find_item_in_dict(sample_list, config['EXT_INDEX_LIST'], runDict, '.transcripts', '.list.transcripts')
+
+
+logfile = f"{resultDir}/{serviceName}.{date_time}.parameters.log"
+logging.basicConfig(filename=logfile, level=config['LOG_LEVEL'], format='%(asctime)s %(message)s')
 
 
 log_items = [
@@ -233,12 +243,13 @@ log_items = [
 ]
 
 for item in log_items:
-	logfile = f"{resultDir}/{serviceName}.{date_time}.parameters.log"
-	log_file(logfile, item[0], "\n", items_list=item[1] if isinstance(item[1], list) else None, items=item[1] if not isinstance(item[1], list) else None)
-
+	if isinstance(item[1], list):
+		logging.info(f"{item[0]}\n{'\n'.join(map(str, item[1]))}")
+	else:
+		logging.info(f"{item[0]} {item[1]}")
 
 ################################################## RULES ##################################################
-ruleorder: copy_fastq > cramtobam > copy_bam > samtools_fastq 
+ruleorder: copy_fastq > cramtobam > copy_bam > samtools_fastq > fastp
 
 rule all:
 	input:
@@ -261,16 +272,15 @@ rule help:
 
 
 #rule bcl2fastq:
-#input:
-#output:
-#params:
+#input: folder to raw datas run 
+#output: folder to demutliplexed datas
+#params: filepath to the samplesheet file
 #	shell:
 #		"""
-#		bcl2fastq --runfolder-dir {input.folder} --output-dir {output.folder} --sample-sheet {params.samplesheet}--barcode-mismatches 1 --fastq-compression-level 1 -r 1 -p 1 -w 6 --no-lane-splitting
+#		bcl2fastq --runfolder-dir {input} --output-dir {output} --sample-sheet {params}--barcode-mismatches 1 --fastq-compression-level 1 -r 1 -p 1 -w 6 --no-lane-splitting
 #		"""
 
 rule copy_fastq:
-	""" Copy input files """
 	output:
 		fastqR1=temp(f"{resultDir}/{{sample}}.R1.fastq.gz"),
 		fastqR2=temp(f"{resultDir}/{{sample}}.R2.fastq.gz")
@@ -278,47 +288,21 @@ rule copy_fastq:
 		process = config['PROCESS_CMD'],
 		download_link1 = lambda wildcards: runDict[wildcards.sample]['.R1.fastq.gz'],
 		download_link2 = lambda wildcards: runDict[wildcards.sample]['.R2.fastq.gz']
-	shell:
-		"""
-		if [ "{params.process}" = "ls" ];
-		then
-		ln -sfn {params.download_link1} {output.fastqR1} && ln -sfn {params.download_link2} {output.fastqR2}
-		else
-		rsync -azvh {params.download_link1} {output.fastqR1} && rsync -azvh {params.download_link2} {output.fastqR2}
-		fi
-		"""
-
-# https://github.com/OpenGene/fastp
-rule fastp:
-	input:
-		fastqR1=temp(f"{resultDir}/{{sample}}.R1.fastq.gz"),
-		fastqR2=temp(f"{resultDir}/{{sample}}.R2.fastq.gz")
-	output:
-		fastqR1=temp(f"{resultDir}/{{sample}}.fastp.R1.fastq.gz"),
-		fastqR2=temp(f"{resultDir}/{{sample}}.fastp.R2.fastq.gz")
-	params:
-		global = config['FASTP_GLOBALS_PARAMS'],
-		compression = config['FASTP_COMPRESSION'],
-		trim = config['FASTP_TRIM']
-	threads: workflow.cores
-	shell:	
-		"""
-		fastp --thread={threads} {params.global} --compression={params.compression} --html={sample}.QC.html --report_title={sample} --in1={input.fastqR1} --in2={input.fastqR2} --out1={output.fastqR1} --out2={output.fastqR2} 
-		"""
+	shell: "[ \"{params.process}\" = \"ln\" ] && ln -sfn {params.download_link1} {output.fastqR1} && ln -sfn {params.download_link2} {output.fastqR2} || rsync -azvh {params.download_link1} {output.fastqR1} && rsync -azvh {params.download_link2} {output.fastqR2}"
 
 rule copy_bam:
 	output: temp(f"{resultDir}/{{sample}}.bam")
 	params:
 		process=config['PROCESS_CMD'],
 		download_link=lambda wildcards: runDict[wildcards.sample]['.bam']
-	shell: "[ \"{params.process}\" = \"ls\" ] && ln -sfn {params.download_link} {output} || rsync -azvh {params.download_link} {output}"
+	shell: "[ \"{params.process}\" = \"ln\" ] && ln -sfn {params.download_link} {output} || rsync -azvh {params.download_link} {output}"
 
 rule copy_cram:
 	output: temp(f"{resultDir}/{{sample}}.cram")
 	params:
 		process=config['PROCESS_CMD'],
 		download_link=lambda wildcards: runDict[wildcards.sample]['.cram']
-	shell: "[ \"{params.process}\" = \"ls\" ] && ln -sfn {params.download_link} {output} || rsync -azvh {params.download_link} {output}"
+	shell: "[ \"{params.process}\" = \"ln\" ] && ln -sfn {params.download_link} {output} || rsync -azvh {params.download_link} {output}"
 
 rule cramtobam:
 	""" Extract bam from a cram file with samtools, need a reference genome """
@@ -328,14 +312,14 @@ rule cramtobam:
 	shell: "samtools view -b -T {params.refgenome} -o {output} {input}"
 
 rule indexing:
-	""" Indexing bam files with samtools or ls """
+	""" Indexing bam files with samtools or ln """
 	input: f"{resultDir}/{{sample}}.bam"
 	output: temp(f"{resultDir}/{{sample}}.bam.bai")
 	params:
 		process=config['PROCESS_CMD'],
 		download_link=lambda wildcards: runDict[wildcards.sample]['.bam.bai']
 	threads: workflow.cores
-	shell: "[ \"{params.process}\" = \"ls\" ] && ln -sfn {params.download_link} {output} || samtools index -b -@ {threads} {input} {output}"
+	shell: "[ \"{params.process}\" = \"ln\" ] && ln -sfn {params.download_link} {output} || samtools index -b -@ {threads} {input} {output}"
 
 rule samtools_fastq:
 	""" Extract fastq from a bam file """
@@ -346,10 +330,28 @@ rule samtools_fastq:
 	shell: "samtools fastq -1 {output.fastqR1} -2 {output.fastqR2} {input}"
 
 
+# https://github.com/OpenGene/fastp
+rule fastp:
+	input:
+		fastqR1=f"{resultDir}/{{sample}}.R1.fastq.gz",
+		fastqR2=f"{resultDir}/{{sample}}.R2.fastq.gz"
+	output:
+		fastqR1=temp(f"{resultDir}/{{sample}}.fastp.R1.fastq.gz"),
+		fastqR2=temp(f"{resultDir}/{{sample}}.fastp.R2.fastq.gz")
+	params:
+		miscs = config['FASTP_GLOBALS_PARAMS'],
+		compression = config['FASTP_COMPRESSION'],
+		trim = config['FASTP_TRIM']
+	threads: workflow.cores
+	shell:	
+		"""
+		fastp --thread={threads} {params.miscs} {params.trim} --compression={params.compression} --html={wildcards.sample}.QC.html --report_title={wildcards.sample} --in1={input.fastqR1} --in2={input.fastqR2} --out1={output.fastqR1} --out2={output.fastqR2} 
+		"""
+
 rule salmon:
 	input:
-		fastqR1=f"{resultDir}/{{sample}}.R1.fastp.fastq.gz",
-		fastqR2=f"{resultDir}/{{sample}}.R2.fastp.fastq.gz"
+		fastqR1=rules.fastp.output.fastqR1,
+		fastqR2=rules.fastp.output.fastqR2
 	output:
 		f"{resultDir}/tmp/{{sample}}.salmon.quant/quant.sf"
 	params:
@@ -400,27 +402,38 @@ onsuccess:
 		shell(f"rm -f {outputDir}/{sample}/{serviceName}/* || true")
 	
 	# Copy results to the main output directory
+	shell(f"rm -f {resultDir}/tmp || true")
 	shell("rsync -azvh --include={include} --exclude='*'  {resultDir}/ {outputDir}")
 
 	# Copy individual sample results to their respective directories
 	for sample in sample_list:
 		shell(f"cp {outputDir}/{sample}/{serviceName}/{sample}_{date_time}_{serviceName}/* {outputDir}/{sample}/{serviceName}/ || true")
 
-	# Optionally, perform depository cp
-	if config['depository']:
-		shell("rsync -azvh --include={include} --exclude='*' {resultDir}/ {depotDir}")
-		for sample in sample_list:
-			shell(f"cp {outputDir}/{sample}/{serviceName}/{sample}_{date_time}_{serviceName}/* {depotDir}/{sample}/{serviceName}/ || true")
+	# Optionally, perform DEPOT_DIR copy
+	if config['DEPOT_DIR']:
+		if outputDir != depotDir:
+			shell("rsync -azvh --include={include} --exclude='*' {resultDir}/ {depotDir}")
+			for sample in sample_list:
+				shell(f"cp {outputDir}/{sample}/{serviceName}/{sample}_{date_time}_{serviceName}/* {depotDir}/{sample}/{serviceName}/ || true")
 	
 	# Generate dictionary for results
-	result_files_list_sample = searchfiles(os.path.normpath(config['run']), f"/*/{serviceName}/*", False)
-	result_files_list_all = searchfiles(os.path.normpath(config['run']), f"/*", False)
-	result_files_list = result_files_list_all + result_files_list_sample
+	search_args = [arg.format(serviceName=serviceName) for arg in ["/*/{serviceName}/*", "/*"]]
+	result_files_list = searchfiles(os.path.normpath(config['run']), search_args, False)	
 	replaced_paths = replace_path(result_files_list, config['run'], "")
 	sample_list.insert(0,"allsamples")
-	resultDict = defaultdict(dict)
-	populate_dictionary(resultDict, sample_list, config['RESULT_EXT_LIST'], replaced_paths, pattern_include=serviceName, split_index=2)	
+	resultDict = populate_dictionary(sample_list, config['RESULT_EXT_LIST'], replaced_paths, pattern_include=serviceName, split_index=2)	
 	print(dict(resultDict))
+
+	# Update resultDict with values from runDict
+	for sample, results in runDict.items():
+		if sample in resultDict:
+			for key, value in results.items():
+				if key in config['RESULT_EXT_LIST']:
+					if key not in resultDict[sample]:
+						resultDict[sample][key] = value
+					elif resultDict[sample][key] is None:
+						resultDict[sample][key] = value
+
 	# Generate html report (need to add the run results)
 	generate_html_report(resultDict, runName, serviceName, sample_list, f"{serviceName}_template.html" , f"{outputDir}/{serviceName}_{date_time}_report.html")
 	copy2(config['TEMPLATE_DIR'] + '/' + serviceName + '_style.css', outputDir)

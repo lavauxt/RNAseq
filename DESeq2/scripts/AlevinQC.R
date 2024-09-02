@@ -1,6 +1,7 @@
-suppressWarnings(library(alevinQC))
-suppressWarnings(library(eds))
-suppressWarnings(library(optparse))
+suppressPackageStartupMessages({(library(alevinQC))
+(library(eds))
+(library(optparse))
+})
 
 option_list<-list(
 	make_option('--input',default='data', help='Folder were the data are stored',dest='baseDir'),

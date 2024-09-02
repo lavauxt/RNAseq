@@ -1,10 +1,10 @@
 ##########################################################################
 # Snakemakefile Version:   1.0
-# Description:             Snakemake file to run Salmon module
+# Description:             Snakemake file to run Salmon alevin module
 ##########################################################################
 
 ################## Context ##################
-# launch snakemake -s  snakefile_count -c(numberofthreads) --config run=absolutepathoftherundirectory without / at the end of the path
+# launch snakemake -s  snakefile_alebin -c(numberofthreads) --config run=absolutepathoftherundirectory without / at the end of the path
 # to launch the snakemake file, use --config to replace variables that must be properly set for the pipeline to work ie run path directory
 # every variable defined in the yaml file can be change
 # separate multiple variable with a space (ex  --config run=runname var1=0.05 var2=12)
@@ -14,7 +14,7 @@
 # use --lt to display docstrings of rules
 
 # input file = fastq files
-# output file = salmon count files (quant.sf)
+# output file = salmon/alvevin count files (quant.sf)
 ################## Import libraries ##################
 
 ########## Note ########################################################################################
@@ -38,6 +38,7 @@ import glob
 import pandas as pd
 import json
 import csv
+import logging
 from shutil import copy2
 from datetime import datetime
 from itertools import product
@@ -95,17 +96,6 @@ def searchfiles(directory, search_arg, recursive_arg):
 	""" Function to search all files in a directory, adding a search arguement append to the directory and a recursive_search options (True/False) """
 	return sorted(filter(os.path.isfile, glob.glob(directory + search_arg, recursive=recursive_arg)))
 
-def log_file(logfile, text, sep, items_list=None, items=None):
-	""" Function to log a variable value or a list of values into a log file """
-	os.makedirs(os.path.dirname(logfile), exist_ok=True)
-	with open(logfile, 'a+') as f:
-		f.write(f"{text}{sep}")
-		if items_list:
-			for item in items_list:
-				f.write(f"{str(item) if item != '' else 'None'}{sep}")
-		else:
-			f.write(f"{str(items) if items != '' else 'None'}{sep}")
-
 def extractlistfromfiles(file_list, ext_list, sep, position):
 	""" Function for creating list from a file list, with a specific extension, a separator and the position of the string we want to extract """
 	return list(set(os.path.basename(files).split(sep)[position] for files in file_list if any(files.endswith(ext) for ext in ext_list)))
@@ -137,17 +127,25 @@ if config['FILTER_SAMPLE']:
 
 runDict = defaultdict(dict)
 populate_dictionary(runDict, sample_list, config['EXT_INDEX_LIST'], files_list, None, 'validation')
-print(dict(runDict))
+
+# Log
+logfile = f"{resultDir}/{serviceName}.{date_time}.parameters.log"
+logging.basicConfig(filename=logfile, level=config['LOG_LEVEL'], format='%(asctime)s %(message)s')
 
 log_items = [
 	('Start of the analysis:', date_time),
 	('Analysing run:', runName),
-	('List of all samples:', sample_list),
+	('List of all samples:', sample_list)
 ]
 
 for item in log_items:
-	logfile = f"{resultDir}/{serviceName}.{date_time}.parameters.log"
-	log_file(logfile, item[0], "\n", items_list=item[1] if isinstance(item[1], list) else None, items=item[1] if not isinstance(item[1], list) else None)
+	if isinstance(item[1], list):
+		logging.info(f"{item[0]}\n{'\n'.join(map(str, item[1]))}")
+	else:
+		logging.info(f"{item[0]} {item[1]}")
+
+
+print(dict(runDict))
 
 
 ################################################## RULES ##################################################
@@ -192,29 +190,21 @@ rule copy_fastq:
 		process = config['PROCESS_CMD'],
 		download_link1 = lambda wildcards: runDict[wildcards.sample]['.R1.fastq.gz'],
 		download_link2 = lambda wildcards: runDict[wildcards.sample]['.R2.fastq.gz']
-	shell:
-		"""
-		if [ "{params.process}" = "ls" ];
-		then
-		ln -sfn {params.download_link1} {output.fastqR1} && ln -sfn {params.download_link2} {output.fastqR2}
-		else
-		rsync -azvh {params.download_link1} {output.fastqR1} && rsync -azvh {params.download_link2} {output.fastqR2}
-		fi
-		"""
+	shell: "[ \"{params.process}\" = \"ln\" ] && ln -sfn {params.download_link1} {output.fastqR1} && ln -sfn {params.download_link2} {output.fastqR2} || rsync -azvh {params.download_link1} {output.fastqR1} && rsync -azvh {params.download_link2} {output.fastqR2}"
 
 rule copy_bam:
 	output: temp(f"{resultDir}/{{sample}}.bam")
 	params:
 		process=config['PROCESS_CMD'],
 		download_link=lambda wildcards: runDict[wildcards.sample]['.bam']
-	shell: "[ \"{params.process}\" = \"ls\" ] && ln -sfn {params.download_link} {output} || rsync -azvh {params.download_link} {output}"
+	shell: "[ \"{params.process}\" = \"ln\" ] && ln -sfn {params.download_link} {output} || rsync -azvh {params.download_link} {output}"
 
 rule copy_cram:
 	output: temp(f"{resultDir}/{{sample}}.cram")
 	params:
 		process=config['PROCESS_CMD'],
 		download_link=lambda wildcards: runDict[wildcards.sample]['.cram']
-	shell: "[ \"{params.process}\" = \"ls\" ] && ln -sfn {params.download_link} {output} || rsync -azvh {params.download_link} {output}"
+	shell: "[ \"{params.process}\" = \"ln\" ] && ln -sfn {params.download_link} {output} || rsync -azvh {params.download_link} {output}"
 
 rule cramtobam:
 	""" Extract bam from a cram file with samtools, need a reference genome """
@@ -224,14 +214,14 @@ rule cramtobam:
 	shell: "samtools view -b -T {params.refgenome} -o {output} {input}"
 
 rule indexing:
-	""" Indexing bam files with samtools or ls """
+	""" Indexing bam files with samtools or ln """
 	input: f"{resultDir}/{{sample}}.bam"
 	output: temp(f"{resultDir}/{{sample}}.bam.bai")
 	params:
 		process=config['PROCESS_CMD'],
 		download_link=lambda wildcards: runDict[wildcards.sample]['.bam.bai']
 	threads: workflow.cores
-	shell: "[ \"{params.process}\" = \"ls\" ] && ln -sfn {params.download_link} {output} || samtools index -b -@ {threads} {input} {output}"
+	shell: "[ \"{params.process}\" = \"ln\" ] && ln -sfn {params.download_link} {output} || samtools index -b -@ {threads} {input} {output}"
 
 rule samtools_fastq:
 	""" Extract fastq from a bam file """
@@ -280,10 +270,6 @@ onsuccess:
 	date_time_end = datetime.now().strftime("%Y%m%d-%H%M%S")
 	with open(logfile, "a+") as f:
 		f.write(f"End of the analysis : {date_time_end}\n")
-	
-	# Clear existing output directories
-	for sample in sample_list:
-		shell(f"rm -f {outputDir}/{sample}/{serviceName}/* || true")
 	
 	# Copy results to the main output directory
 	shell("rsync -azvh --include={include} --exclude='*'  {resultDir}/ {outputDir}")

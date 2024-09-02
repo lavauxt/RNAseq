@@ -20,8 +20,8 @@ run: ""
 EXT_INDEX_LIST : [".R1.fastq.gz",".R2.fastq.gz"]
 # List of files extension to process
 PROCESS_FILE: [".R1.fastq.gz",".R2.fastq.gz"]
-# How to copy input files (bam, bai, cram) : ls or leave empty (it will rsync files or index for bai from bam)
-PROCESS_CMD: 'ls'
+# How to copy input files (bam, bai, cram) : ln or leave empty (it will rsync files or index for bai from bam)
+PROCESS_CMD: 'ln'
 
 # Samples list exclusion (not to be analysed) ; exclude if startwith, case insensitive
 EXCLUDE_SAMPLE: ['POOL_', 'BlcADN', 'blanc', 'BlcPCR', 'blcPCR', 'Z_NTC', 'NTC', 'Blc']
@@ -51,6 +51,9 @@ REFGENOMEFA_PATH: "/databases/salmon//GRCm39.Ensembl110.gencodevm33.salmon.index
 FASTP_GLOBALS_PARAMS: "--disable_quality_filtering --disable_trim_poly_g --disable_length_filtering --disable_adapter_trimming"
 FASTP_COMPRESSION: 1
 FASTP_TRIM: "" # --trim_front2=5 --trim_tail2=5
+
+# LOG level 30=logging.WARNING or 20=logging.INFO
+LOG_LEVEL: 30
 
 # Setup threads for alevin (workflow.cores or a integer)
 THREADS: 4
