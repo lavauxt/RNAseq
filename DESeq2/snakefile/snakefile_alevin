@@ -4,7 +4,7 @@
 ##########################################################################
 
 ################## Context ##################
-# launch snakemake -s  snakefile_alebin -c(numberofthreads) --config run=absolutepathoftherundirectory without / at the end of the path
+# launch snakemake -s  snakefile_alevin -c(numberofthreads) --config run=absolutepathoftherundirectory without / at the end of the path
 # to launch the snakemake file, use --config to replace variables that must be properly set for the pipeline to work ie run path directory
 # every variable defined in the yaml file can be change
 # separate multiple variable with a space (ex  --config run=runname var1=0.05 var2=12)
@@ -144,16 +144,12 @@ for item in log_items:
 	else:
 		logging.info(f"{item[0]} {item[1]}")
 
-
 print(dict(runDict))
-
-
 ################################################## RULES ##################################################
 ruleorder: copy_fastq > cramtobam > copy_bam > samtools_fastq
 
 rule all:
 	input:
-		#expand(f"{resultDir}/tmp/{{sample}}.success",sample=sample_list),
 		expand(f"{resultDir}/tmp/{{sample}}/alevin/{{sample}}_alevinReport.html", sample=sample_list)
 
 
@@ -168,7 +164,7 @@ rule help:
 	Use -p to display shell commands
 	Use --lt to display docstrings of rules
 	Input file = fastq from ScRNAseq (R1 barecode+umi, R2 reads)
-	Output file = qunatification files
+	Output file = quantification files
 	"""
 
 

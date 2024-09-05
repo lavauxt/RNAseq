@@ -25,7 +25,7 @@ RUN apt-get update  --fix-missing && \
 # Mamba install 
 RUN mamba install -y -c conda-forge -c bioconda -c biobuilds \
 	snakemake pandas samtools \
-	salmon~=1.10.3 \
+	salmon~=1.10 \
 	&& mamba clean -afy
 
 
@@ -41,7 +41,7 @@ RUN mamba create -n rtools -y -c conda-forge -c bioconda -c biobuilds \
 	bioconductor-genefilter  bioconductor-reportingtools bioconductor-regionreport \
 	bioconductor-pcaexplorer bioconductor-apeglm  bioconductor-dose \
 	bioconductor-pathview  bioconductor-clusterprofiler bioconductor-spia\
-	r-seurat  bioconductor-alevinqc~=1.18.0  \
+	r-seurat  bioconductor-alevinqc~=1.18 bioconductor-singler~=2.4 bioconductor-celldex~=1.2 bioconductor-singlecellexperiment \
 	&& mamba clean -afy
 
 # r-monocle3  r-harmony # other SnRNAseq tools
