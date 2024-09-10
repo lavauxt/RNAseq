@@ -15,6 +15,20 @@
 #                     "Zfx", "Ocrl", "Ddx39b", "Gpm6b", "Fthl17", "Esr1", "Foxl2", "Cyp19a1", "Wnt4", 
 #                     "Amhr2", "Eda2r")
 
+# male.features <- c(
+#  "Abca13", "Adam22", "Arhgap31-as1", "Bcorp1", "Bpi", "Camp", "Cdy4p", "Ceacam19", 
+#  "Ceacam6", "Ceacam8", "Celsr2", "Crisp3", "Ctd-2308n23.2", "Ddx3y", "Defa3", "Defa4", 
+#  "Eif1ay", "Fbn1", "Gstt1", "Inhba", "Kalp", "Kdm5d", "Kif9-as1", "Lcn2", "Linc00278", 
+#  "Ltf", "Mmp8", "Mpo", "Prky", "Rn7skp282", "Rp11-424g14.1", "Rp6-99m1.2", "Rps4y1", 
+#  "Slc1a2", "Tmsb4y", "Ttty14", "Ttty15", "Txlng2p", "Uty", "Usp9y", "Xist", "Ythdf3-as1", 
+#  "Zfy", "Zfy-as1", "Znf839p1"
+#)
+
+# female.features <- c(
+#  "Ac084018.1", "Ighg3", "Ighv1-46", "Igkv1-27", "Igkv3-15", "Igkv3d-11", "Iglv1-40", 
+#  "Iglv1-47", "Iglv3-1", "Iglv6-57", "Ift81", "Kdm5c", "Prkx", "Tsix", "Xist"
+#)
+
 #object <- CellCycleScoring(
 #  object = object,
 #  s.features = female.features,  # Female-specific genes

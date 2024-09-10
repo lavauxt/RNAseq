@@ -56,7 +56,7 @@ FASTP_TRIM: "" # --trim_front2=5 --trim_tail2=5
 LOG_LEVEL: 30
 
 # Setup threads for alevin (workflow.cores or a integer)
-THREADS: 4
+THREADS: "workflow.cores"
 # For alevin quantification fastq mode, path to the index file
 SALMON_INDEX: "/databases/salmon/GRCm39.Ensembl110.gencodevm33.salmon.index/salmon_index/"
 ALEVIN_GENE_TABLE: "/databases/salmon/GRCm39.Ensembl110.gencodevm33.salmon.index/txp2gene.tsv"
