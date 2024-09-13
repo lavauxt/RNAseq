@@ -193,7 +193,6 @@ rule bcl_convert:
 		mv $R2_fastq {output.fastqR2}
 		"""
 
-
 rule copy_fastq:
 	""" Copy input files """
 	output:
@@ -227,7 +226,24 @@ rule alevinQC:
 	input: f"{resultDir}/tmp/{{sample}}/alevin/quants_mat.gz"
 	output: f"{resultDir}/tmp/{{sample}}/alevin/{{sample}}_alevinReport.html"
 	conda: "rtools"
-	shell: """ Rscript AlevinQC.R --input {input} --output {output} --sample {wildcards.sample} """
+	shell: """ Rscript /app/scripts/AlevinQC.Rscript --input {input} --output {output} --sample {wildcards.sample} """
+
+rule seurat:
+	input: f"{resultDir}/tmp/{{sample}}/alevin/quants_mat.gz"
+	output: f"{resultDir}/tmp/"
+	params:
+		prefix=config['PROJECT_PREFIX'],
+		min_genes=config['MIN_GENES'],
+		max_genes=config['MAX_GENES'],
+		max_mito=config['MAX_MITO'],
+		min_housekeeping_expr=config['MIN_HOUSEKEEPING_EXPR'],
+		remove_ribo=config['REMOVE_RIBO'],
+		species=config['SPECIES']
+	conda: "rtools"
+	shell:
+		"""
+		Rscript /app/scripts/Seurat.Rscript --files {input} --output {output} --prefix {params.prefix} --sample_id {wildcards.sample} --min_genes {params.min_genes} --max_genes {params.max_genes} --max_mito {params.max_mito} --min_housekeeping_expr {params.min_housekeeping_expr} --remove_ribo {params.remove_ribo} --species {params.species}
+		"""
 
 onstart:
 	shell(f"touch {os.path.join(outputDir, f'{serviceName}Running.txt')}")

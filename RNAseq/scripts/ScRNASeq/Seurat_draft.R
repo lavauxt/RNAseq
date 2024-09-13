@@ -271,23 +271,6 @@ library(Seurat)
 library(tidyverse)
 library(pheatmap)
 
-# 10X CellRanger .HDF5 format ---------
-hdf5_obj <- Read10X_h5(filename = "../data/20k_PBMC_3p_HT_nextgem_Chromium_X_filtered_feature_bc_matrix.h5",
-                       use.names = TRUE,
-                       unique.features = TRUE)
-pbmc.seurat <- CreateSeuratObject(counts = hdf5_obj)
-pbmc.seurat
-
-# QC and Filtering ----------
-# explore QC
-pbmc.seurat$mitoPercent <- PercentageFeatureSet(pbmc.seurat, pattern = '^MT-')
-VlnPlot(pbmc.seurat, features = c("nFeature_RNA", "nCount_RNA", "mitoPercent"), ncol = 3)
-pbmc.seurat.filtered <- subset(pbmc.seurat, subset = nCount_RNA > 800 &
-                                 nFeature_RNA > 500 &
-                                 mitoPercent < 10)
-
-# It is a good practice to filter out cells with non-sufficient genes identified and genes with non-sufficient expression across cells.
-
 
 # pre-process standard workflow ---------------
 pbmc.seurat.filtered <- NormalizeData(object = pbmc.seurat.filtered)
