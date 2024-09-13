@@ -185,4 +185,30 @@ for (file in input_files) {
 
   # Save filtered object with SingleR metadata
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(opt$sample_id, "_SingleR_filtered.rds")))
+
+  # Additional steps: Normalization, Variable Feature Identification, Scaling, PCA, Clustering, UMAP
+  seurat_obj_filtered <- NormalizeData(object = seurat_obj_filtered)
+  seurat_obj_filtered <- FindVariableFeatures(object = seurat_obj_filtered)
+  seurat_obj_filtered <- ScaleData(object = seurat_obj_filtered)
+  seurat_obj_filtered <- RunPCA(object = seurat_obj_filtered)
+  
+  # Elbow plot to determine the number of PCs to use
+  pca_output_file <- file.path(opt$output, paste0(opt$sample_id, "_PCA_ElbowPlot.pdf"))
+  pdf(pca_output_file)
+  ElbowPlot(seurat_obj_filtered)
+  dev.off()
+
+  seurat_obj_filtered <- FindNeighbors(object = seurat_obj_filtered, dims = 1:20)
+  seurat_obj_filtered <- FindClusters(object = seurat_obj_filtered)
+  seurat_obj_filtered <- RunUMAP(object = seurat_obj_filtered, dims = 1:20)
+  
+  # Save UMAP plot
+  umap_output_file <- file.path(opt$output, paste0(opt$sample_id, "_UMAP.pdf"))
+  pdf(umap_output_file)
+  DimPlot(seurat_obj_filtered, reduction = "umap", label = TRUE, pt.size = 0.5) + theme(legend.position = 'right')
+  dev.off()
+  
+  # Save final filtered object
+  saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(opt$sample_id, "_final_filtered.rds")))
+
 }

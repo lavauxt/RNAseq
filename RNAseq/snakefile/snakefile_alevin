@@ -166,6 +166,8 @@ rule help:
 	Input file = fastq from ScRNAseq (R1 barecode+umi, R2 reads)
 	Output file = quantification files
 	"""
+
+
 rule bcl_convert:
 	""" Convert BCL files to FASTQ using bcl-convert """
 	input:
@@ -226,7 +228,7 @@ rule alevinQC:
 	input: f"{resultDir}/tmp/{{sample}}/alevin/quants_mat.gz"
 	output: f"{resultDir}/tmp/{{sample}}/alevin/{{sample}}_alevinReport.html"
 	conda: "rtools"
-	shell: """ Rscript /app/scripts/AlevinQC.Rscript --input {input} --output {output} --sample {wildcards.sample} """
+	shell: """ Rscript /app/scripts/ScRNASeq/AlevinQC.Rscript --input {input} --output {output} --sample {wildcards.sample} """
 
 rule seurat:
 	input: f"{resultDir}/tmp/{{sample}}/alevin/quants_mat.gz"
@@ -242,7 +244,7 @@ rule seurat:
 	conda: "rtools"
 	shell:
 		"""
-		Rscript /app/scripts/Seurat.Rscript --files {input} --output {output} --prefix {params.prefix} --sample_id {wildcards.sample} --min_genes {params.min_genes} --max_genes {params.max_genes} --max_mito {params.max_mito} --min_housekeeping_expr {params.min_housekeeping_expr} --remove_ribo {params.remove_ribo} --species {params.species}
+		Rscript /app/scripts/ScRNASeq/Seurat.Rscript --files {input} --output {output} --prefix {params.prefix} --sample_id {wildcards.sample} --min_genes {params.min_genes} --max_genes {params.max_genes} --max_mito {params.max_mito} --min_housekeeping_expr {params.min_housekeeping_expr} --remove_ribo {params.remove_ribo} --species {params.species}
 		"""
 
 onstart:

@@ -26,13 +26,6 @@ DimPlot(object = QFCZ5_WT_filtered, reduction = "umap", label = TRUE, label.box 
 
 FeaturePlot(object = QFCZ5_WT_filtered, reduction = "umap", features = "Hba-a1")
 
-FeaturePlot(object = QFCZ5_WT_filtered, reduction = "umap", features = "Sry")
-
-# Plot filtered
-plot1_filtered <- FeatureScatter(QFCZ5_WT_filtered, feature1 = "nCount_RNA", feature2 = "percent.mt")
-plot2_filtered <- FeatureScatter(QFCZ5_WT_filtered, feature1 = "nCount_RNA", feature2 = "nFeature_RNA")
-plot1_filtered + plot2_filtered
-
 # Testing some graphs
 metadata <- QFCZ5_WT@meta.data
 View(metadata)
@@ -202,34 +195,7 @@ QFCZ.markers %>%
     ungroup() -> top10
 DoHeatmap(QFCZ5_WT_filtered, features = top10$gene) + NoLegend()
 
-
-
-
-# pre-process standard workflow ---------------
-pbmc.seurat.filtered <- NormalizeData(object = pbmc.seurat.filtered)
-pbmc.seurat.filtered <- FindVariableFeatures(object = pbmc.seurat.filtered)
-pbmc.seurat.filtered <- ScaleData(object = pbmc.seurat.filtered)
-pbmc.seurat.filtered <- RunPCA(object = pbmc.seurat.filtered)
-pbmc.seurat.filtered <- FindNeighbors(object = pbmc.seurat.filtered, dims = 1:20)
-pbmc.seurat.filtered <- FindClusters(object = pbmc.seurat.filtered)
-pbmc.seurat.filtered <- RunUMAP(object = pbmc.seurat.filtered, dims = 1:20)
-
-# running steps above to get clusters
-View(pbmc.seurat.filtered@meta.data)
-DimPlot(pbmc.seurat.filtered, reduction = 'umap')
-
-# get reference data -----------
-ref <- celldex::HumanPrimaryCellAtlasData()
-View(as.data.frame(colData(ref)))
-
-# expression values are log counts (log normalized counts)
-
-
-# run SingleR (default mode) ---------
-# default for SingleR is to perform annotation of each individual cell in the test dataset
-
-pbmc_counts <- GetAssayData(pbmc.seurat.filtered, slot = 'counts')
-
+# SingleR
 pred <- SingleR(test = pbmc_counts,
         ref = ref,
         labels = ref$label.main)
@@ -239,38 +205,16 @@ pred
 pbmc.seurat.filtered$singleR.labels <- pred$labels[match(rownames(pbmc.seurat.filtered@meta.data), rownames(pred))]
 DimPlot(pbmc.seurat.filtered, reduction = 'umap', group.by = 'singleR.labels')
 
-
-# Annotation diagnostics ----------
-
-
 # ...Based on the scores within cells -----------
 pred
 pred$scores
-
 plotScoreHeatmap(pred)
-
-
 # ...Based on deltas across cells ----------
-
 plotDeltaDistribution(pred)
 
-
-
-
 # ...Comparing to unsupervised clustering ------------
-
 tab <- table(Assigned=pred$labels, Clusters=pbmc.seurat.filtered$seurat_clusters)
 pheatmap(log10(tab+10), color = colorRampPalette(c('white','blue'))(10))
-
-# script to annotate cell types from 20k Human PBMCs from a healthy female donor
-# setwd("~/Desktop/demo/singleCell_singleR_part2/scripts")
-
-library(SingleR)
-library(celldex)
-library(Seurat)
-library(tidyverse)
-library(pheatmap)
-
 
 # pre-process standard workflow ---------------
 pbmc.seurat.filtered <- NormalizeData(object = pbmc.seurat.filtered)
@@ -286,27 +230,6 @@ pbmc.seurat.filtered <- RunUMAP(object = pbmc.seurat.filtered, dims = 1:20)
 DimPlot(pbmc.seurat.filtered, reduction = "umap")
 View(pbmc.seurat.filtered@meta.data)
 
-
-# run SingleR with multiple reference datasets (default mode) ---------
-
-# for pbmc data, we will use two datasets
-hpca <- celldex::HumanPrimaryCellAtlasData()
-dice <- celldex::DatabaseImmuneCellExpressionData()
-
-# ...1. Strategy 1: Using reference-specific labels ----------
-hpca$label.main
-dice$label.main
-
-# adding ref info to labels
-hpca$label.main <- paste0('HPCA.', hpca$label.main)
-dice$label.main <- paste0('DICE.', dice$label.main)
-
-# create a combined ref based on shared genes
-shared <- intersect(rownames(hpca), rownames(dice))
-combined <- cbind(hpca[shared,], dice[shared,])
-combined
-combined$label.main
-
 # run singleR using combined ref
 # savings counts into a separate object
 pbmc_counts <- GetAssayData(pbmc.seurat.filtered, slot = 'counts')
@@ -320,7 +243,6 @@ View(pbmc.seurat.filtered@meta.data)
 DimPlot(pbmc.seurat.filtered, reduction = 'umap', group.by = 'com.res1.labels', label = TRUE)
 
 # ...2. Strategy 2: Comparing scores across references ----------
-
 hpca$label.main
 dice$label.main
 hpca$label.main <- gsub('HPCA\\.','', hpca$label.main)
@@ -344,9 +266,7 @@ metadata(com.res2$orig.results$DICE)$de.genes
 # Combined diagnostics
 plotScoreHeatmap(com.res2)
 
-
 # ...3. Strategy 3: Using Harmonized Labels ----------
-
 hpca.ont <- celldex::HumanPrimaryCellAtlasData(cell.ont = 'nonna')
 dice.ont <- celldex::DatabaseImmuneCellExpressionData(cell.ont = 'nonna')
 
@@ -360,18 +280,12 @@ tail(sort(table(hpca.ont$label.ont)),10)
 tail(sort(table(dice.ont$label.ont)), 10)
 
 # using label.ont instead on label.main while running SingleR
-
 com.res3 <- SingleR(test = pbmc_counts,
         ref = list(HPCA = hpca.ont, DICE = dice.ont),
         labels = list(hpca.ont$label.ont, dice.ont$label.ont))
-
-
 table(com.res3$labels)
 
-
-
 # How to map cell ontology terms? ----------------
-
 colData(hpca.ont)
 colData(dice.ont)
 
