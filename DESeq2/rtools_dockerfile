@@ -20,14 +20,16 @@ RUN echo "$TZ" > /etc/timezone
 
 # Update and install some tools
 RUN apt-get update  --fix-missing && \
-	apt-get install -y unzip vim rsync aria2
+	apt-get install -y unzip vim rsync aria2 alien
+
+COPY tools/bcl-convert-4.3.6-2.el7.x86_64.rpm /tools/bcl-convert-4.3.6-2.el7.x86_64.rpm
+RUN alien -i -d /tools/bcl-convert-4.3.6-2.el7.x86_64.rpm
 
 # Mamba install 
 RUN mamba install -y -c conda-forge -c bioconda -c biobuilds \
 	snakemake pandas samtools \
 	salmon~=1.10 \
 	&& mamba clean -afy
-
 
 # To activate the environnement use mamba activate rtools
 # To deactivate use mamba deactivate
@@ -40,12 +42,11 @@ RUN mamba create -n rtools -y -c conda-forge -c bioconda -c biobuilds \
 	r-pheatmap bioconductor-degreport r-heatmaply bioconductor-enhancedvolcano r-maditr \
 	bioconductor-genefilter  bioconductor-reportingtools bioconductor-regionreport \
 	bioconductor-pcaexplorer bioconductor-apeglm  bioconductor-dose \
-	bioconductor-pathview  bioconductor-clusterprofiler bioconductor-spia\
+	bioconductor-pathview  bioconductor-clusterprofiler bioconductor-spia \
 	r-seurat  bioconductor-alevinqc~=1.18 bioconductor-singler~=2.4 bioconductor-celldex~=1.2 bioconductor-singlecellexperiment \
+	r-monocle3  r-harmony \
+	bioconductor-glmgampoi r-presto \
 	&& mamba clean -afy
-
-# r-monocle3  r-harmony # other SnRNAseq tools
-# bioconductor-spia # alternative to GSEA
 
 # Copy applications files (/app)
 COPY ./ /app

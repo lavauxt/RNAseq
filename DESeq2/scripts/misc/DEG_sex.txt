@@ -60,3 +60,5 @@ YTHDF3-AS1	YTHDF3-AS1	4.537132e-02	-5.4199977
 IGLV1-40	IGLV1-40	4.848961e-02	1.3649485
 			
 Female = upregulated
+from PBMC_example$bulk_DE_cors # 59 sex-specific DEGs in bulk PBMC (up-regulated = female-biased)
+https://cran.r-project.org/web/packages/scMappR/vignettes/scMappR_Vignette.html

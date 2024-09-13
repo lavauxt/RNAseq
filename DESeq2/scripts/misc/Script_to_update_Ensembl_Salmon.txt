@@ -10,7 +10,7 @@
 
 # Update EnsDb Homo Sapiens v107
 # if needed, install required libraries
-BiocManager::install(c("AnnotationHub", "ensembldb", "AnnotationForge")
+BiocManager::install(c("AnnotationHub", "ensembldb", "AnnotationForge"))
 
 library(AnnotationHub)
 library(ensembldb)

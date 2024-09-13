@@ -16,6 +16,9 @@ OUTPUT_DIR: "/output/repository"
 # Default path to the input datas == {run} from listener.py/launcher.py
 run: ""
 
+# Path to the sample sheet file
+SAMPLE_SHEET: ""
+
 # Files to index into the dictionary depending on extension (endwith)
 EXT_INDEX_LIST : [".R1.fastq.gz",".R2.fastq.gz"]
 # List of files extension to process
