@@ -647,48 +647,30 @@ write.csv(as.data.frame(gseaKEGG), file= paste(FolderOutput ,"/KEGG/KEGG_Results
 gseaKEGG_results <- gseaKEGG@result
 
 ## Output images for all significant KEGG pathways
-get_kegg_plots <- function(x) {
+# Define a safe version of get_kegg_plots using purrr::safely
+safe_get_kegg_plots <- purrr::safely(function(x) {
    pathview(gene.data = foldchanges, 
             pathway.id = gseaKEGG_results$ID[x], 
             species = "hsa",
             limit = list(gene = 2, cpd = 1),
-			kegg.dir = paste(FolderOutput ,"/KEGG/", sep = ""))
-}
+            kegg.dir = paste(FolderOutput, "/KEGG/", sep = ""))
+})
 
-# need to remove some pathview because it crash the analysis
-gseaKEGG_results <- gseaKEGG_results %>%
-  dplyr::filter(rownames(gseaKEGG_results) != 'hsa04215')
+# Filter out specific KEGG pathways
+#gseaKEGG_results <- gseaKEGG_results %>%
+#  dplyr::filter(!rownames(gseaKEGG_results) %in% c(
+#    'hsa04215', 'hsa05206', 'hsa01240', 'hsa01200', 
+#    'hsa01230', 'hsa01212', 'hsa01210', 'hsa01232', 
+#    'hsa01250', 'hsa01040'))
 
-gseaKEGG_results <- gseaKEGG_results %>%
-  dplyr::filter(rownames(gseaKEGG_results) != 'hsa05206')
+# Set working directory
+setwd(paste(FolderOutput, "/KEGG/", sep = ""))
 
-gseaKEGG_results <- gseaKEGG_results %>%
-  dplyr::filter(rownames(gseaKEGG_results) != 'hsa01240')
+# Map over the pathway IDs safely
+results <- purrr::map(1:length(gseaKEGG_results$ID), safe_get_kegg_plots)
 
-gseaKEGG_results <- gseaKEGG_results %>%
-  dplyr::filter(rownames(gseaKEGG_results) != 'hsa01200')
-
-gseaKEGG_results <- gseaKEGG_results %>%
-  dplyr::filter(rownames(gseaKEGG_results) != 'hsa01230')
-
-gseaKEGG_results <- gseaKEGG_results %>%
-  dplyr::filter(rownames(gseaKEGG_results) != 'hsa01212')
-
-gseaKEGG_results <- gseaKEGG_results %>%
-  dplyr::filter(rownames(gseaKEGG_results) != 'hsa01210')
-
-gseaKEGG_results <- gseaKEGG_results %>%
-  dplyr::filter(rownames(gseaKEGG_results) != 'hsa01232')
-
-gseaKEGG_results <- gseaKEGG_results %>%
-  dplyr::filter(rownames(gseaKEGG_results) != 'hsa01250')
-
-gseaKEGG_results <- gseaKEGG_results %>%
-  dplyr::filter(rownames(gseaKEGG_results) != 'hsa01040')
-
-
-setwd(paste(FolderOutput ,"/KEGG/", sep = ""))
-try(purrr::map(1:length(gseaKEGG_results$ID), get_kegg_plots))
+# Optionally, you can inspect errors in results by checking:
+errors <- purrr::map(results, "error")  # To see which pathways had errors
 
 # clusterProfiler::GSEA
 
@@ -720,93 +702,13 @@ write.csv(as.data.frame(spia_result), file= paste(FolderOutput ,"/SPIA/Spia_Resu
 # Status: gives the direction in which the pathway is perturbed (activated or inhibited)
 # KEGGLINK : web link to the KEGG website that displays the pathway image with the differentially expressed genes highlighted in red
 
-# Fork to SPIA Plot function
-plotP_fork<-function(x,threshold=0.05){
-
-if(class(x)!="data.frame" | dim(x)[1]<1 | !all(c("ID","pNDE","pPERT","pG","pGFdr","pGFWER")%in%names(x)))
-{
- stop("plotP can be applied only to a dataframe produced by spia function!!!") 
-}
-
-if(threshold<x[1,"pGFdr"]){
-print(paste("The threshold value was corrected to be equal to ",x[1,"pGFdr"]))
-threshold <- x[1,"pGFdr"]
-}
-
-pb<-x[,"pPERT"]
-ph<-x[,"pNDE"]
-
-#determine what combine method was used to convert ph and pb into pG
-combinemethod=ifelse(sum(combfunc(pb,ph,"fisher")==x$pG)>sum(combfunc(pb,ph,"norminv")==x$pG),"fisher","norminv")
-
-okx<-(ph<1e-6)
-oky<-(pb<1e-6)
-ph[ph<1e-6]<-1e-6
-pb[pb<1e-6]<-1e-6
-
-plot(-log(ph),-log(pb),xlim=c(0,max(c(-log(ph),-log(pb))+1,na.rm=TRUE)),
- ylim=c(0,max(c(-log(ph),-log(pb)+1),na.rm=TRUE)),pch=19,main="SPIA two-way evidence plot",cex=1.5,
- xlab="-log(P NDE)",ylab="-log(P PERT)")
-tr<-threshold/dim(na.omit(x))[1]
-
-#abline(v=-log(tr),lwd=1,col="red",lty=2)
-#abline(h=-log(tr),lwd=1,col="red",lty=2)
-
-if(combinemethod=="fisher"){
-points(c(0,-log(getP2(tr,"fisher")^2)),c(-log(getP2(tr,"fisher")^2),0),col="red",lwd=2,cex=0.7,type="l")
-}else{
-somep1=exp(seq(from=min(log(ph)),to=max(log(ph)),length=200))
-somep2=pnorm(qnorm(tr)*sqrt(2)-qnorm(somep1))
-points(-log(somep1),-log(somep2),col="red",lwd=2,cex=0.7,type="l") 
-}
-
-trold=tr
-tr<-max(x[,"pG"][x[,"pGFdr"]<=threshold])
-if(tr<=trold){tr=trold*1.03}
-
-if(combinemethod=="fisher"){
-points(c(0,-log(getP2(tr,"fisher")^2)),c(-log(getP2(tr,"fisher")^2),0),col="blue",lwd=2,cex=0.7,type="l")
- }else{
-somep1=exp(seq(from=min(log(ph)),to=max(log(ph)),length=200))
-somep2=pnorm(qnorm(tr)*sqrt(2)-qnorm(somep1))
-points(-log(somep1),-log(somep2),col="blue",lwd=2,cex=0.7,type="l") 
-}
-
-#abline(v=-log(tr),lwd=1,col="blue",lty=2)
-#abline(h=-log(tr),lwd=1,col="blue",lty=2)
-
-oks<-x[,"pGFWER"]<=threshold
-oks2<-x[,"pGFdr"]<=threshold
-
-points(-log(ph)[oks2],-log(pb)[oks2],pch=19,col="blue",cex=1.5)
-points(-log(ph)[oks],-log(pb)[oks],pch=19,col="red",cex=1.5)
-
-if(sum(oks)>0){
- text(-log(ph)[oks]+0.70,-log(pb)[oks],labels=as.vector(x$ID)[oks],cex=0.65)
-}
-if(sum(oks2)>0){
- text(-log(ph)[oks2]+0.70,-log(pb)[oks2],labels=as.vector(x$ID)[oks2],cex=0.65)
-}
-
-testx <- sum(okx)
-if (!(is.na(testx)) && (sum(okx)>0)) {
-	points(-log(ph)[okx]-0.12,-log(pb)[okx],pch="|",col="black",cex=1.5)
-}
-
-testy <- sum(oky)
-if (!(is.na(testy)) && (sum(oky)>0)) {
-	points(-log(ph)[oky],-log(pb)[oky]-0.12,pch="_",col="black",cex=1.5)
-}
-
-}
-
 # Plot SPIA results
 # In this plot, each pathway is a point and the coordinates are the log of pNDE (using a hypergeometric model) and the p-value from perturbations, pPERT. The
 # oblique lines in the plot show the significance regions based on the combined evidence
+source('SPIA_plot_fork.R')
 pdf(file = paste(FolderOutput ,"/SPIA/SPIA_Plot_Results_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
 plotP_fork(spia_result) # we can specify other threshold value
 dev.off()
-
 
 ### Output the versions of all tools used in the DE analysis
 sessionInfo()

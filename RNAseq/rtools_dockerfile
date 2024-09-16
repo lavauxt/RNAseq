@@ -35,7 +35,7 @@ RUN mamba install -y -c conda-forge -c bioconda -c biobuilds \
 # To deactivate use mamba deactivate
 # in snakemake add conda: "rtools"
 RUN mamba create -n rtools -y -c conda-forge -c bioconda -c biobuilds \
-	r-tidyverse r-ggplot2  r-devtools r-ggnewscale \
+	r-tidyverse r-ggplot2  r-devtools r-ggnewscale r-terra \
 	r-ggrepel r-sessioninfo r-ashr r-rcolorbrewer r-optparse r-gdata \
 	bioconductor-deseq2  bioconductor-tximport bioconductor-eds \
 	bioconductor-annotationhub  bioconductor-ensembldb  bioconductor-annotationforge bioconductor-org.hs.eg.db \

@@ -13,11 +13,11 @@
 # female.features <- c("Ac084018.1", "Ighg3", "Ighv1-46", "Igkv1-27", "Igkv3-15", "Igkv3d-11", "Iglv1-40", "Iglv1-47", "Iglv3-1", "Iglv6-57", "Ift81", "Kdm5c", "Prkx", "Tsix", "Xist")
 
 # curated
-female.features_mouse <- c("Xist", "Tsix", "Kdm6a", "Eif2s3x", "Ddx3x", "Rps4x", "Prdx4", "Med14","Zfx", "Ocrl", "Ddx39b", "Gpm6b", "Esr1", "Foxl2", "Wnt4", "Amhr2", "Eda2r")
-male.features_mouse <- c("Eif2s3y", "Ddx3y", "Uty", "Kdm5d", "Sox30", "Sox9", "Amh", "Insl3")
+female.features.mouse <- c("Xist", "Tsix", "Kdm6a", "Eif2s3x", "Ddx3x", "Rps4x", "Prdx4", "Med14","Zfx", "Ocrl", "Ddx39b", "Gpm6b", "Esr1", "Foxl2", "Wnt4", "Amhr2", "Eda2r")
+male.features.mouse <- c("Eif2s3y", "Ddx3y", "Uty", "Kdm5d", "Sox30", "Sox9", "Amh", "Insl3")
 
-female_features_human <- c("IGKV1-27", "IGHG3", "IGHV1-46", "IGKV3-15", "IGKV3D-11", "IGLV3-1", "IGLV1-47", "IFT81", "IGLV1-40")
-male_features_human <- c("XIST", "TSIX", "DDX3Y", "PRKY", "KDM5D", "RPS4Y1", "UTY", "USP9Y", "EIF1AY", "TXLNG2P", "ZFY", "TTTY15", "BCORP1", 
+female_features.human <- c("IGKV1-27", "IGHG3", "IGHV1-46", "IGKV3-15", "IGKV3D-11", "IGLV3-1", "IGLV1-47", "IFT81", "IGLV1-40")
+male_features.human <- c("XIST", "TSIX", "DDX3Y", "PRKY", "KDM5D", "RPS4Y1", "UTY", "USP9Y", "EIF1AY", "TXLNG2P", "ZFY", "TTTY15", "BCORP1", 
 "LINC00278", "RP11-424G14.1", "TMSB4Y", "LTF", "RN7SKP282", "CEACAM8", "ZNF839P1", "ABCA13", "ZFY-AS1", "TTTY14", "DEFA4", "CEACAM6", "DEFA3", "BPI", "IGLV6-57", "RP6-99M1.2", 
  "KALP", "CAMP", "CRISP3", "KDM5C", "MPO", "PRKX", "KIF9-AS1", "ADAM22", "ARHGAP31-AS1", "CELSR2", "CDY4P", "AC084018.1", 
 "LCN2", "CTD-2308N23.2", "INHBA", "FBN1", "SLC1A2", "GSTT1", "CEACAM19", "MMP8", "YTHDF3-AS1")

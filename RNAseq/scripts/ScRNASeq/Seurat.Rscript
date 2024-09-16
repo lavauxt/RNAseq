@@ -33,7 +33,12 @@ suppressPackageStartupMessages({
   library(tidyverse)
   library(ggplot2)
   library(pheatmap)
+  library(monocle3)  # Load monocle3 library
 })
+
+# Load SexScoring function from an external file
+source("SexScore.R")
+source("Sex_related_gene.R")
 
 option_list <- list(
   make_option(c("-f", "--files"), type="character", default=NULL, 
@@ -55,7 +60,11 @@ option_list <- list(
   make_option(c("--remove_ribo"), type="logical", default=FALSE, 
               help="Remove ribosomal genes from the data [default %default]", metavar="logical"),
   make_option(c("--species"), type="character", default="mouse", 
-              help="Species for the analysis ('mouse' or 'human') [default %default]", metavar="character")
+              help="Species for the analysis ('mouse' or 'human') [default %default]", metavar="character"),
+  make_option(c("--cell_cycle_regression"), type="logical", default=FALSE, 
+              help="Perform cell cycle regression [default %default]", metavar="logical"),
+  make_option(c("--sex_scoring"), type="logical", default=FALSE, 
+              help="Perform sex scoring regression [default %default]", metavar="logical")
 )
 
 opt_parser <- OptionParser(option_list=option_list)
@@ -74,11 +83,15 @@ if (tolower(opt$species) == "human") {
   mito_pattern <- "^MT-"
   hb_pattern <- "^Hb"
   ribo_patterns <- c("^RPS", "^RPL")
+  female.features <- female.features.human
+  male.features <- male.features.human
 } else if (tolower(opt$species) == "mouse") {
   housekeeper_file <- "Housekeeper_mouse.R"
   mito_pattern <- "^mt-"
   hb_pattern <- "^Hb"
   ribo_patterns <- c("^Rp")
+  female.features <- female.features.mouse
+  male.features <- male.features.mouse
 } else {
   stop("Invalid species specified. Use 'human' or 'mouse'.", call.=FALSE)
 }
@@ -92,9 +105,11 @@ if (tolower(opt$species) == "human") {
   dice <- celldex::DatabaseImmuneCellExpressionData()
   housekeeper_genes <- housekeeper_human
 } else if (tolower(opt$species) == "mouse") {
-  hpca <- celldex::MouseCellAtlasData()
-  dice <- celldex::DatabaseImmuneCellExpressionData()
+  hpca <- celldex::MouseRNAseqData()
+  dice <- celldex::ImmGenData()
   housekeeper_genes <- housekeeper_mouse
+} else {
+  stop("Invalid species specified. Use 'human' or 'mouse'.", call.=FALSE)
 }
 
 # Add reference-specific labels
@@ -186,13 +201,51 @@ for (file in input_files) {
   # Save filtered object with SingleR metadata
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(opt$sample_id, "_SingleR_filtered.rds")))
 
+  # Cell Cycle Scoring and Regression (if option is enabled)
+  if (opt$cell_cycle_regression) {
+    # Load cell cycle genes
+    s.genes <- cc.genes$s.genes
+    g2m.genes <- cc.genes$g2m.genes
+
+    # Perform Cell Cycle Scoring
+    seurat_obj_filtered <- CellCycleScoring(seurat_obj_filtered, s.features = s.genes, g2m.features = g2m.genes)
+
+    # Perform Cell Cycle Regression
+    seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat_obj_filtered))
+  }
+
+# Sex Scoring (if option is enabled)
+if (opt$sex_scoring) {
+  seurat_obj_filtered <- SexScoring(
+    object = seurat_obj_filtered, 
+    female.features = female.features, 
+    male.features = male.features, 
+    set.ident = TRUE
+  )
+
+  # Calculate Sex Difference
+  seurat_obj_filtered$Sex.Difference <- seurat_obj_filtered$Female.Score - seurat_obj_filtered$Male.Score
+
+  # Perform Sex Regression
+  seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = "Sex.Difference", features = rownames(seurat_obj_filtered))
+
+  # PCA Analysis on Sex-related Genes
+  PCA_sex <- RunPCA(seurat_obj_filtered, features = c(male.features, female.features))
+  
+  # Save PCA Plot as PDF
+  pca_sex_output_file <- file.path(opt$output, paste0(opt$sample_id, "_PCA_Sex.pdf"))
+  pdf(pca_sex_output_file)
+  DimPlot(PCA_sex)
+  dev.off()
+  }
+
   # Additional steps: Normalization, Variable Feature Identification, Scaling, PCA, Clustering, UMAP
   seurat_obj_filtered <- NormalizeData(object = seurat_obj_filtered)
   seurat_obj_filtered <- FindVariableFeatures(object = seurat_obj_filtered)
   seurat_obj_filtered <- ScaleData(object = seurat_obj_filtered)
   seurat_obj_filtered <- RunPCA(object = seurat_obj_filtered)
   
-  # Elbow plot to determine the number of PCs to use
+  # Save PCA Elbow plot
   pca_output_file <- file.path(opt$output, paste0(opt$sample_id, "_PCA_ElbowPlot.pdf"))
   pdf(pca_output_file)
   ElbowPlot(seurat_obj_filtered)
@@ -211,4 +264,31 @@ for (file in input_files) {
   # Save final filtered object
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(opt$sample_id, "_final_filtered.rds")))
 
+  ### Monocle3 Analysis ###
+  # Convert Seurat object to monocle3 object
+  cds <- as.cell_data_set(seurat_obj_filtered)
+
+  # Preprocess the data
+  cds <- preprocess_cds(cds, num_dim = 50)
+
+  # Reduce dimensions using UMAP
+  cds <- reduce_dimension(cds, umap.n_neighbors = 30, umap.min_dist = 0.1)
+
+  # Cluster cells
+  cds <- cluster_cells(cds)
+
+  # Learn trajectory graph
+  cds <- learn_graph(cds)
+
+  # Order cells in pseudotime
+  cds <- order_cells(cds)
+
+  # Save monocle3 trajectory plot
+  monocle_output_file <- file.path(opt$output, paste0(opt$sample_id, "_monocle_trajectory.pdf"))
+  pdf(monocle_output_file)
+  plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE)
+  dev.off()
+
+  # Save monocle3 object
+  saveRDS(cds, file = file.path(opt$output, paste0(opt$sample_id, "_monocle3_cds.rds")))
 }
