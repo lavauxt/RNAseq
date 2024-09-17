@@ -37,8 +37,8 @@ suppressPackageStartupMessages({
 })
 
 # Load SexScoring function from an external file
-source("SexScore.R")
-source("Sex_related_gene.R")
+source("/app/scripts/ScRNASeq/SexScore.R")
+source("/app/scripts/ScRNASeq/Sex_related_gene.R")
 
 option_list <- list(
   make_option(c("-f", "--files"), type="character", default=NULL, 
@@ -77,16 +77,20 @@ if (is.null(opt$files)) {
 
 input_files <- unlist(strsplit(opt$files, ","))
 
+if (!dir.exists(opt$output)) {
+  dir.create(opt$output, recursive = TRUE)
+}
+
 # Define housekeeping file based on the specified species
 if (tolower(opt$species) == "human") {
-  housekeeper_file <- "Housekeeper_human.R"
+  housekeeper_file <- "/app/scripts/ScRNASeq/Housekeeper_human.R"
   mito_pattern <- "^MT-"
   hb_pattern <- "^Hb"
   ribo_patterns <- c("^RPS", "^RPL")
   female.features <- female.features.human
   male.features <- male.features.human
 } else if (tolower(opt$species) == "mouse") {
-  housekeeper_file <- "Housekeeper_mouse.R"
+  housekeeper_file <- "/app/scripts/ScRNASeq/Housekeeper_mouse.R"
   mito_pattern <- "^mt-"
   hb_pattern <- "^Hb"
   ribo_patterns <- c("^Rp")
@@ -152,15 +156,19 @@ for (file in input_files) {
   }
   
   # Save plots
-  output_file <- file.path(opt$output, paste0(opt$sample_id, "_QC_plots.pdf"))
+  output_file <- file.path(opt$output, paste0(opt$sample_id, "_QC1_plots.pdf"))
   pdf(output_file)
   
   # Visualize QC metrics as a violin plot
   VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
           ncol = 6, pt.size = 0) + theme(legend.position = 'right')
   
+  output_file <- file.path(opt$output, paste0(opt$sample_id, "_VlnPlots.pdf"))
+  pdf(output_file)
+
   # Plot UMI Counts vs Percent Mito
   plot(seurat_obj$nCount_RNA, seurat_obj$percent.mt, main = "UMI Counts x Percent Mito", xlab = "UMI_count", ylab = "percent mito")
+  output_file <- file.path(opt$output, paste0(opt$sample_id, "_QC2_plots.pdf"))
   dev.off()  
   
   # Filter using command-line arguments
@@ -176,15 +184,20 @@ for (file in input_files) {
   }
 
   # Save filtered QC plots
-  filtered_output_file <- file.path(opt$output, paste0(opt$sample_id, "_filtered_QC_plots.pdf"))
+  filtered_output_file <- file.path(opt$output, paste0(opt$sample_id, "_filtered_QC1_plots.pdf"))
   pdf(filtered_output_file)
   
   # Visualize QC metrics for filtered data
   VlnPlot(seurat_obj_filtered, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
           ncol = 6, pt.size = 0) + theme(legend.position = 'right')
   
+  filtered_output_file <- file.path(opt$output, paste0(opt$sample_id, "_filtered_VlnPlots.pdf"))
+  pdf(filtered_output_file)
+
   # Plot UMI Counts vs Percent Mito for filtered data
   plot(seurat_obj_filtered$nCount_RNA, seurat_obj_filtered$percent.mt, main = "UMI Counts x Percent Mito (Filtered)", xlab = "UMI_count", ylab = "percent mito")
+  filtered_output_file <- file.path(opt$output, paste0(opt$sample_id, "_filtered_QC1_plots.pdf"))
+  pdf(filtered_output_file)
   dev.off() 
 
   counts_data <- GetAssayData(seurat_obj_filtered, slot = 'counts')
@@ -206,10 +219,8 @@ for (file in input_files) {
     # Load cell cycle genes
     s.genes <- cc.genes$s.genes
     g2m.genes <- cc.genes$g2m.genes
-
     # Perform Cell Cycle Scoring
     seurat_obj_filtered <- CellCycleScoring(seurat_obj_filtered, s.features = s.genes, g2m.features = g2m.genes)
-
     # Perform Cell Cycle Regression
     seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat_obj_filtered))
   }
@@ -225,10 +236,8 @@ if (opt$sex_scoring) {
 
   # Calculate Sex Difference
   seurat_obj_filtered$Sex.Difference <- seurat_obj_filtered$Female.Score - seurat_obj_filtered$Male.Score
-
   # Perform Sex Regression
   seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = "Sex.Difference", features = rownames(seurat_obj_filtered))
-
   # PCA Analysis on Sex-related Genes
   PCA_sex <- RunPCA(seurat_obj_filtered, features = c(male.features, female.features))
   
@@ -246,10 +255,12 @@ if (opt$sex_scoring) {
   seurat_obj_filtered <- RunPCA(object = seurat_obj_filtered)
   
   # Save PCA Elbow plot
-  pca_output_file <- file.path(opt$output, paste0(opt$sample_id, "_PCA_ElbowPlot.pdf"))
+  pca_output_file <- file.path(opt$output, paste0(opt$sample_id, "_PCA.pdf"))
   pdf(pca_output_file)
   ElbowPlot(seurat_obj_filtered)
-  dev.off()
+  elbow_output_file <- file.path(opt$output, paste0(opt$sample_id, "_ElbowPlot.pdf"))
+  pdf(elbow_output_file)
+    dev.off()
 
   seurat_obj_filtered <- FindNeighbors(object = seurat_obj_filtered, dims = 1:20)
   seurat_obj_filtered <- FindClusters(object = seurat_obj_filtered)
@@ -258,7 +269,10 @@ if (opt$sex_scoring) {
   # Save UMAP plot
   umap_output_file <- file.path(opt$output, paste0(opt$sample_id, "_UMAP.pdf"))
   pdf(umap_output_file)
+
   DimPlot(seurat_obj_filtered, reduction = "umap", label = TRUE, pt.size = 0.5) + theme(legend.position = 'right')
+  dimplot_output_file <- file.path(opt$output, paste0(opt$sample_id, "_UMAP.pdf"))
+  pdf(dimplot_output_file)
   dev.off()
   
   # Save final filtered object
@@ -267,19 +281,14 @@ if (opt$sex_scoring) {
   ### Monocle3 Analysis ###
   # Convert Seurat object to monocle3 object
   cds <- as.cell_data_set(seurat_obj_filtered)
-
   # Preprocess the data
   cds <- preprocess_cds(cds, num_dim = 50)
-
   # Reduce dimensions using UMAP
   cds <- reduce_dimension(cds, umap.n_neighbors = 30, umap.min_dist = 0.1)
-
   # Cluster cells
   cds <- cluster_cells(cds)
-
   # Learn trajectory graph
   cds <- learn_graph(cds)
-
   # Order cells in pseudotime
   cds <- order_cells(cds)
 
@@ -287,6 +296,8 @@ if (opt$sex_scoring) {
   monocle_output_file <- file.path(opt$output, paste0(opt$sample_id, "_monocle_trajectory.pdf"))
   pdf(monocle_output_file)
   plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE)
+  plot_cells_output_file <- file.path(opt$output, paste0(opt$sample_id, "_monocle_plot.pdf"))
+  pdf(plot_cells_output_file)
   dev.off()
 
   # Save monocle3 object
