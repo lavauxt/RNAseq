@@ -33,12 +33,14 @@ suppressPackageStartupMessages({
   library(tidyverse)
   library(ggplot2)
   library(pheatmap)
-  library(monocle3)  # Load monocle3 library
+  library(monocle3) 
 })
 
+setwd("/app/scripts/ScRNASeq/")
+getwd()
 # Load SexScoring function from an external file
-source("/app/scripts/ScRNASeq/SexScore.R")
-source("/app/scripts/ScRNASeq/Sex_related_gene.R")
+source("SexScore.R")
+source("Sex_related_gene.R")
 
 option_list <- list(
   make_option(c("-f", "--files"), type="character", default=NULL, 
@@ -138,6 +140,9 @@ for (file in input_files) {
   project_name <- paste(opt$prefix, opt$sample_id, sep = "_")
   seurat_obj <- CreateSeuratObject(counts = txi$counts, min.cells = 3, min.features = 200, project = project_name)
   
+  # Save raw Seurat object
+  saveRDS(seurat_obj, file = file.path(opt$output, paste0(opt$sample_id, "_Seurat_raw.rds")))
+
   # Fetch data for mitochondrial, hemoglobin, and ribosomal genes
   seurat_obj[["percent.mt"]] <- PercentageFeatureSet(seurat_obj, pattern = mito_pattern)
   seurat_obj[["percent.hb"]] <- PercentageFeatureSet(seurat_obj, pattern = hb_pattern)
@@ -150,12 +155,24 @@ for (file in input_files) {
     
   # Add percent expression of housekeeping genes to metadata
   if (exists("housekeeper_genes")) {
-    seurat_obj[["percent.housekeeping"]] <- rowMeans(seurat_obj[["RNA"]]@counts[housekeeper_genes, ]) / seurat_obj$nCount_RNA * 100
+    # Get the RNA layer
+    DefaultAssay(seurat_obj) <- "RNA"
+    rna_data <- GetAssayData(seurat_obj, layer = 'counts')
+    
+    # Check if the housekeeping genes are present in the dataset
+    common_genes <- intersect(rownames(rna_data), housekeeper_genes)
+    
+    if (length(common_genes) > 0) {
+      # Compute housekeeping gene expression only if common genes are found
+      seurat_obj[["percent.housekeeping"]] <- rowMeans(rna_data[common_genes, ]) / seurat_obj$nCount_RNA * 100
+    } else {
+      warning("No housekeeping genes found in the dataset.")
+    }
   } else {
     warning("Housekeeping genes not defined.")
   }
-  
-  # Save plots
+
+    # Save plots
   output_file <- file.path(opt$output, paste0(opt$sample_id, "_QC1_plots.pdf"))
   pdf(output_file)
   
