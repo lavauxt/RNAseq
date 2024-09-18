@@ -358,6 +358,8 @@ for (i in seq_along(input_files)) {
     message('Cell cycle regression')
     seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat_obj_filtered))
     
+    # Perform PCA before plotting
+    seurat_obj_filtered <- RunPCA(seurat_obj_filtered)
     # Save Dim Plot as PDF
     dimplot_cellcycle_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_CellCycle.pdf"))
     pdf(dimplot_cellcycle_output_file)
