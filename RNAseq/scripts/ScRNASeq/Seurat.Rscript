@@ -344,12 +344,13 @@ for (i in seq_along(input_files)) {
   # Plot DimPlot colored by SingleR labels
   print(DimPlot(seurat_obj_filtered, group.by = "singleR.labels", label = TRUE, label.size = 3) +
     theme(legend.position = "right"))
-
   dev.off()
+
   # Save filtered object with SingleR metadata
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(sample_ids[i], "_SingleR_filtered.rds")))
 
-  # Additional steps: Normalization, Variable Feature Identification, Scaling, PCA
+  # Normalization
+  message('Normalization')
   seurat_obj_filtered <- NormalizeData(object = seurat_obj_filtered)
   
   # Cell Cycle Scoring and Regression (if option is enabled)
@@ -359,9 +360,11 @@ for (i in seq_along(input_files)) {
     g2m.genes <- cc.genes$g2m.genes
     
     # Perform Cell Cycle Scoring
+    message('Cell Cycle Scoring')
     seurat_obj_filtered <- CellCycleScoring(seurat_obj_filtered, s.features = s.genes, g2m.features = g2m.genes)
     
     # Perform Cell Cycle Regression
+    message('Cell cycle regression')
     seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat_obj_filtered))
     
     # Save Dim Plot as PDF
@@ -373,6 +376,7 @@ for (i in seq_along(input_files)) {
   # Sex Scoring (if option is enabled)
   } else if (opt$sex_scoring) {
     # Perform Sex Scoring
+    message('Sexe Scoring')
     seurat_obj_filtered <- SexScoring(
       object = seurat_obj_filtered, 
       female.features = female.features, 
@@ -384,6 +388,7 @@ for (i in seq_along(input_files)) {
     seurat_obj_filtered$Sex.Difference <- seurat_obj_filtered$Female.Score - seurat_obj_filtered$Male.Score
     
     # Perform Sex Regression
+    message('Sexe regression')
     seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = "Sex.Difference", features = rownames(seurat_obj_filtered))
     
     # PCA Analysis on Sex-related Genes
@@ -416,6 +421,7 @@ for (i in seq_along(input_files)) {
 
   ### Monocle3 Analysis ###
   # Convert Seurat object to Monocle3 object
+  message('Monocle3 analysis start')
   cds <- as.cell_data_set(seurat_obj_filtered)
 
   # Preprocess the data
@@ -434,13 +440,14 @@ for (i in seq_along(input_files)) {
   cds <- order_cells(cds, root_cells = colnames(cds)[cds@clusters$UMAP == 1])
 
   # Save Monocle3 trajectory plot
-  plot_cells_output_file <- file.path(opt$output, paste0(sample_ids[i], "_monocle_plot.pdf"))
+  plot_cells_output_file <- file.path(opt$output, paste0(sample_ids[i], "_monocle3_plot.pdf"))
   pdf(plot_cells_output_file)
   plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE)
   dev.off()
 
   # Save monocle3 object
   saveRDS(cds, file = file.path(opt$output, paste0(sample_ids[i], "_monocle3_cds.rds")))
+  message('Monocle3 analysis end')
 }
 
 cat("Processing completed for all files.\n")
