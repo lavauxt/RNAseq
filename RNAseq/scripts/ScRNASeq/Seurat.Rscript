@@ -23,16 +23,16 @@
 # https://bioconductor.org/packages/3.18/bioc/manuals/scran/man/scran.pdf
 
 suppressPackageStartupMessages({
+  library(optparse)
+  library(tidyverse)
+  library(ggplot2)
+  library(dplyr)
   library(Seurat)
   library(tximport)
   library(eds)
-  library(dplyr)
-  library(optparse)
+  library(pheatmap)
   library(SingleR)
   library(celldex)
-  library(tidyverse)
-  library(ggplot2)
-  library(pheatmap)
   library(monocle3) 
 })
 
@@ -224,23 +224,71 @@ for (i in seq_along(input_files)) {
   warning("Housekeeping genes not defined.")
   }
 
+  # Print available metadata columns
+  cat("Available metadata columns:\n")
+  print(colnames(seurat_obj@meta.data))
+
   # Plot UMI Counts vs Percent Mito
   qc_output_file <- file.path(opt$output, paste0(sample_ids[i], "_QC_plots.pdf"))
   pdf(qc_output_file)
   plot(seurat_obj$nCount_RNA, seurat_obj$percent.mt, main = "UMI Counts x Percent Mito", xlab = "UMI_count", ylab = "percent mito")
   dev.off()  
 
-  # Save VlnPlot
   vln_output_file <- file.path(opt$output, paste0(sample_ids[i], "_VlnPlots.pdf"))
-  pdf(vln_output_file)
-  VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
-        ncol = 6, pt.size = 0) + theme(legend.position = 'right')
-  dev.off() 
+  pdf(vln_output_file, width = 10, height = 8)
+  print(VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
+                      ncol = 6, pt.size = 0) + theme(legend.position = 'right'))
+  dev.off()
 
   # Print basic statistics of the data before filtering
   cat("Summary of the data before filtering:\n")
   cat("Number of cells: ", ncol(seurat_obj), "\n")
   cat("Number of features: ", nrow(seurat_obj), "\n")
+
+  # Define the filtering criteria
+  filter_criteria <- seurat_obj@meta.data$nFeature_RNA > opt$min_genes & 
+                      seurat_obj@meta.data$nFeature_RNA < opt$max_genes
+
+
+  # Apply additional filters if corresponding columns are present
+  if ("percent.mt" %in% colnames(seurat_obj@meta.data)) {
+    filter_criteria <- filter_criteria & seurat_obj@meta.data$percent.mt < opt$max_mito
+  } else {
+    cat("Warning: 'percent.mt' column not found. Skipping mitochondrial percentage filter.\n")
+  }
+
+  if ("percent.housekeeping" %in% colnames(seurat_obj@meta.data)) {
+    filter_criteria <- filter_criteria & seurat_obj@meta.data$percent.housekeeping > opt$min_housekeeping_expr
+  } else {
+    cat("Warning: 'percent.housekeeping' column not found. Skipping housekeeping percentage filter.\n")
+  }
+
+
+  # Print the first few values of each filter criterion
+  cat("First few values of nFeature_RNA:\n")
+  print(head(seurat_obj@meta.data$nFeature_RNA))
+
+  if ("percent.mt" %in% colnames(seurat_obj@meta.data)) {
+    cat("First few values of percent.mt:\n")
+    print(head(seurat_obj@meta.data$percent.mt))
+  }
+
+  if ("percent.housekeeping" %in% colnames(seurat_obj@meta.data)) {
+    cat("First few values of percent.housekeeping:\n")
+    print(head(seurat_obj@meta.data$percent.housekeeping))
+  }
+
+  # Print the filter criteria for the first few cells
+  cat("First few filter criteria values:\n")
+  print(head(filter_criteria))
+
+  # Print the filter criteria to debug
+  cat("Filter criteria summary:\n")
+  print(summary(filter_criteria))
+
+  # Check for non-NA values in the filter criteria
+  cat("Number of cells passing filter criteria before subsetting: ", sum(filter_criteria), "\n")
+
 
   # Print the range of values for each filtering criterion if present
   cat("Range of nFeature_RNA: ", range(seurat_obj@meta.data$nFeature_RNA), "\n")
@@ -255,28 +303,16 @@ for (i in seq_along(input_files)) {
     "percent.housekeeping is not present in metadata."
   }, "\n")
 
-  # Construct the filtering criteria based on the presence of metadata columns
-  filter_criteria <- seurat_obj@meta.data$nFeature_RNA > opt$min_genes & 
-                      seurat_obj@meta.data$nFeature_RNA < opt$max_genes
-
-  if ("percent.mt" %in% colnames(seurat_obj@meta.data)) {
-    filter_criteria <- filter_criteria & seurat_obj@meta.data$percent.mt < opt$max_mito
-  }
-
-  if ("percent.housekeeping" %in% colnames(seurat_obj@meta.data)) {
-    filter_criteria <- filter_criteria & seurat_obj@meta.data$percent.housekeeping > opt$min_housekeeping_expr
-  }
-
   # Perform filtering
   seurat_obj_filtered <- subset(seurat_obj, subset = filter_criteria)
 
-  # Check if the filtered object is empty
-  if (ncol(seurat_obj_filtered) == 0) {
-    warning("No cells meet the filtering criteria. Consider adjusting the thresholds.")
-  } else {
+  # Perform filtering
+  if (any(filter_criteria)) {
+    seurat_obj_filtered <- subset(seurat_obj, subset = filter_criteria)
     cat("Number of cells after filtering: ", ncol(seurat_obj_filtered), "\n")
+  } else {
+    cat("No cells meet the filtering criteria. Consider adjusting the thresholds.\n")
   }
-
 
   # Save UMI Counts vs Percent Mito for filtered data
   filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_filtered_QC_plots.pdf"))
@@ -284,12 +320,12 @@ for (i in seq_along(input_files)) {
   plot(seurat_obj_filtered$nCount_RNA, seurat_obj_filtered$percent.mt, main = "UMI Counts x Percent Mito (Filtered)", xlab = "UMI_count", ylab = "percent mito")
   dev.off() 
 
-  # Save VlnPlot for filtered data
-  vln_filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_filtered_VlnPlots.pdf"))
-  pdf(vln_filtered_output_file)
-  VlnPlot(seurat_obj_filtered, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
-          ncol = 6, pt.size = 0) + theme(legend.position = 'right')
-  dev.off()  
+  # Generate and save the violin plot for the unfiltered object
+  vln_filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_VlnPlots.pdf"))
+  pdf(vln_filtered_output_file, width = 10, height = 8)
+  print(VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
+                ncol = 6, pt.size = 0) + theme(legend.position = 'right'))
+  dev.off()
   
   # Single R annotation
   # Add SingleR results to metadata
