@@ -337,15 +337,6 @@ for (i in seq_along(input_files)) {
   singleR_results <- SingleR(test = counts_data, ref = combined, labels = combined$label.main)
   seurat_obj_filtered$singleR.labels <- singleR_results$labels[match(rownames(seurat_obj_filtered@meta.data), rownames(singleR_results))]
 
-  # Print DimPlot with cell labels from SingleR
-  dimplot_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_with_SingleR_labels.pdf"))
-  pdf(dimplot_output_file)
-
-  # Plot DimPlot colored by SingleR labels
-  print(DimPlot(seurat_obj_filtered, group.by = "singleR.labels", label = TRUE, label.size = 3) +
-    theme(legend.position = "right"))
-  dev.off()
-
   # Save filtered object with SingleR metadata
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(sample_ids[i], "_SingleR_filtered.rds")))
 
