@@ -237,35 +237,34 @@ for (i in seq_along(input_files)) {
         ncol = 6, pt.size = 0) + theme(legend.position = 'right')
   dev.off() 
 
-  # Filter using command-line arguments
   # Print basic statistics of the data before filtering
   cat("Summary of the data before filtering:\n")
   cat("Number of cells: ", ncol(seurat_obj), "\n")
   cat("Number of features: ", nrow(seurat_obj), "\n")
 
   # Print the range of values for each filtering criterion if present
-  cat("Range of nFeature_RNA: ", range(seurat_obj$nFeature_RNA), "\n")
+  cat("Range of nFeature_RNA: ", range(seurat_obj@meta.data$nFeature_RNA), "\n")
   cat("Range of percent.mt: ", if ("percent.mt" %in% colnames(seurat_obj@meta.data)) {
-    range(seurat_obj$percent.mt)
+    range(seurat_obj@meta.data$percent.mt)
   } else {
     "percent.mt is not present in metadata."
   }, "\n")
   cat("Range of percent.housekeeping: ", if ("percent.housekeeping" %in% colnames(seurat_obj@meta.data)) {
-    range(seurat_obj$percent.housekeeping)
+    range(seurat_obj@meta.data$percent.housekeeping)
   } else {
     "percent.housekeeping is not present in metadata."
   }, "\n")
 
   # Construct the filtering criteria based on the presence of metadata columns
-  filter_criteria <- nFeature_RNA > opt$min_genes & 
-                      nFeature_RNA < opt$max_genes
+  filter_criteria <- seurat_obj@meta.data$nFeature_RNA > opt$min_genes & 
+                      seurat_obj@meta.data$nFeature_RNA < opt$max_genes
 
   if ("percent.mt" %in% colnames(seurat_obj@meta.data)) {
-    filter_criteria <- filter_criteria & percent.mt < opt$max_mito
+    filter_criteria <- filter_criteria & seurat_obj@meta.data$percent.mt < opt$max_mito
   }
 
   if ("percent.housekeeping" %in% colnames(seurat_obj@meta.data)) {
-    filter_criteria <- filter_criteria & percent.housekeeping > opt$min_housekeeping_expr
+    filter_criteria <- filter_criteria & seurat_obj@meta.data$percent.housekeeping > opt$min_housekeeping_expr
   }
 
   # Perform filtering
@@ -278,11 +277,6 @@ for (i in seq_along(input_files)) {
     cat("Number of cells after filtering: ", ncol(seurat_obj_filtered), "\n")
   }
 
-  # Optionally remove ribosomal genes
-  if (opt$remove_ribo && length(ribo_patterns) > 0) {
-    ribo_genes <- grep(paste(ribo_patterns, collapse = "|"), rownames(seurat_obj), value = TRUE)
-    seurat_obj_filtered <- seurat_obj_filtered[!(rownames(seurat_obj_filtered) %in% ribo_genes), ]
-  }
 
   # Save UMI Counts vs Percent Mito for filtered data
   filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_filtered_QC_plots.pdf"))
