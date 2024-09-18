@@ -223,16 +223,19 @@ for (i in seq_along(input_files)) {
   } else {
   warning("Housekeeping genes not defined.")
   }
-  # Save QC metrics as a violin plot
-  VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
-          ncol = 6, pt.size = 0) + theme(legend.position = 'right')
-  output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_VlnPlots.pdf"))
-  pdf(output_file)
 
   # Plot UMI Counts vs Percent Mito
   plot(seurat_obj$nCount_RNA, seurat_obj$percent.mt, main = "UMI Counts x Percent Mito", xlab = "UMI_count", ylab = "percent mito")
-  output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_QC_plots.pdf"))
+  output_file <- file.path(opt$output, paste0(sample_ids[i], "_QC_plots.pdf"))
+  pdf(output_file)
   dev.off()  
+
+  # Save QC metrics as a violin plot
+  VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
+          ncol = 6, pt.size = 0) + theme(legend.position = 'right')
+  output_file <- file.path(opt$output, paste0(sample_ids[i], "_VlnPlots.pdf"))
+  pdf(output_file)
+  dev.off() 
 
   # Filter using command-line arguments
   seurat_obj_filtered <- subset(seurat_obj, subset = nFeature_RNA > opt$min_genes & 
@@ -246,18 +249,20 @@ for (i in seq_along(input_files)) {
     seurat_obj_filtered <- seurat_obj_filtered[!(rownames(seurat_obj_filtered) %in% ribo_genes), ]
   }
 
+  # Save UMI Counts vs Percent Mito for filtered data
+  plot(seurat_obj_filtered$nCount_RNA, seurat_obj_filtered$percent.mt, main = "UMI Counts x Percent Mito (Filtered)", xlab = "UMI_count", ylab = "percent mito")
+  filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_filtered_QC_plots.pdf"))
+  pdf(filtered_output_file)
+  dev.off() 
+
   # Save QC metrics for filtered data
   VlnPlot(seurat_obj_filtered, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
           ncol = 6, pt.size = 0) + theme(legend.position = 'right')
 
-  filtered_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_filtered_VlnPlots.pdf"))
+  filtered_output_file <- file.path(opt$output, paste0sample_ids[i], "_filtered_VlnPlots.pdf"))
   pdf(filtered_output_file)
+  dev.off()  
 
-  # Save UMI Counts vs Percent Mito for filtered data
-  plot(seurat_obj_filtered$nCount_RNA, seurat_obj_filtered$percent.mt, main = "UMI Counts x Percent Mito (Filtered)", xlab = "UMI_count", ylab = "percent mito")
-  filtered_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_filtered_QC_plots.pdf"))
-  pdf(filtered_output_file)
-  dev.off() 
   
   # Single R annotation
   # Add SingleR results to metadata
@@ -266,7 +271,7 @@ for (i in seq_along(input_files)) {
   seurat_obj_filtered$singleR.labels <- singleR_results$labels[match(rownames(seurat_obj_filtered@meta.data), rownames(singleR_results))]
 
   # Save filtered object with SingleR metadata
-  saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(opt$sample_ids[i], "_SingleR_filtered.rds")))
+  saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(sample_ids[i], "_SingleR_filtered.rds")))
 
   # Cell Cycle Scoring and Regression (if option is enabled)
   if (opt$cell_cycle_regression) {
@@ -278,10 +283,10 @@ for (i in seq_along(input_files)) {
     # Perform Cell Cycle Regression
     seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat_obj_filtered))
     # Save PCA Plot as PDF
-    pca_cellcycle_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_PCA_CellCycle.pdf"))
+    pca_cellcycle_output_file <- file.path(opt$output, paste0(sample_ids[i], "_PCA_CellCycle.pdf"))
     pdf(pca_cellcycle_output_file)
     DimPlot(pca_cellcycle_output_file)
-    dimplot_cellcycle_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_DimPlot_CellCycle.pdf"))
+    dimplot_cellcycle_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_CellCycle.pdf"))
     pdf(dimplot_cellcycle_output_file)
     dev.off()
   }
@@ -302,10 +307,10 @@ for (i in seq_along(input_files)) {
   # PCA Analysis on Sex-related Genes
   PCA_sex <- RunPCA(seurat_obj_filtered, features = c(male.features, female.features))
   # Save PCA Plot as PDF
-  pca_sex_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_PCA_Sex.pdf"))
+  pca_sex_output_file <- file.path(opt$output, paste0(sample_ids[i], "_PCA_Sex.pdf"))
   pdf(pca_sex_output_file)
   DimPlot(PCA_sex)
-  dimplot_sex_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_DimPlot_Sex.pdf"))
+  dimplot_sex_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_Sex.pdf"))
   pdf(dimplot_sex_output_file)
   dev.off()
   }
@@ -317,10 +322,10 @@ for (i in seq_along(input_files)) {
   seurat_obj_filtered <- RunPCA(object = seurat_obj_filtered)
 
   # Save PCA & Elbow plot
-  pca_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_PCA.pdf"))
+  pca_output_file <- file.path(opt$output, paste0(sample_ids[i], "_PCA.pdf"))
   pdf(pca_output_file)
   ElbowPlot(seurat_obj_filtered)
-  elbow_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_ElbowPlot.pdf"))
+  elbow_output_file <- file.path(opt$output, paste0(sample_ids[i], "_ElbowPlot.pdf"))
   pdf(elbow_output_file)
   dev.off()
 
@@ -330,15 +335,15 @@ for (i in seq_along(input_files)) {
   seurat_obj_filtered <- RunUMAP(object = seurat_obj_filtered, dims = 1:20)
 
   # Save UMAP & Dimplot
-  umap_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_UMAP.pdf"))
+  umap_output_file <- file.path(opt$output, paste0(sample_ids[i], "_UMAP.pdf"))
   pdf(umap_output_file)
   DimPlot(seurat_obj_filtered, reduction = "umap", label = TRUE, pt.size = 0.5) + theme(legend.position = 'right')
-  dimplot_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_UMAP.pdf"))
+  dimplot_output_file <- file.path(opt$output, paste0(sample_ids[i], "_UMAP.pdf"))
   pdf(dimplot_output_file)
   dev.off()
 
   # Save final filtered object
-  saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(opt$sample_ids[i], "_final_filtered.rds")))
+  saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(sample_ids[i], "_final_filtered.rds")))
 
   ### Monocle3 Analysis ###
   # Convert Seurat object to monocle3 object
@@ -356,12 +361,12 @@ for (i in seq_along(input_files)) {
 
   # Save Monocle3 trajectory plot
   plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE)
-  plot_cells_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_monocle_plot.pdf"))
+  plot_cells_output_file <- file.path(opt$output, paste0(sample_ids[i], "_monocle_plot.pdf"))
   pdf(plot_cells_output_file)
   dev.off()
 
   # Save monocle3 object
-  saveRDS(cds, file = file.path(opt$output, paste0(opt$sample_ids[i], "_monocle3_cds.rds")))
+  saveRDS(cds, file = file.path(opt$output, paste0(sample_ids[i], "_monocle3_cds.rds")))
 }
 
 cat("Processing completed for all files.\n")
