@@ -223,11 +223,6 @@ for (i in seq_along(input_files)) {
   } else {
   warning("Housekeeping genes not defined.")
   }
-
-  # Save QC plots
-  output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_QC1_plots.pdf"))
-  pdf(output_file)
-
   # Save QC metrics as a violin plot
   VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
           ncol = 6, pt.size = 0) + theme(legend.position = 'right')
@@ -236,7 +231,7 @@ for (i in seq_along(input_files)) {
 
   # Plot UMI Counts vs Percent Mito
   plot(seurat_obj$nCount_RNA, seurat_obj$percent.mt, main = "UMI Counts x Percent Mito", xlab = "UMI_count", ylab = "percent mito")
-  output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_QC2_plots.pdf"))
+  output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_QC_plots.pdf"))
   dev.off()  
 
   # Filter using command-line arguments
@@ -251,10 +246,6 @@ for (i in seq_along(input_files)) {
     seurat_obj_filtered <- seurat_obj_filtered[!(rownames(seurat_obj_filtered) %in% ribo_genes), ]
   }
 
-  # Save filtered QC plots
-  filtered_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_filtered_QC1_plots.pdf"))
-  pdf(filtered_output_file)
-
   # Save QC metrics for filtered data
   VlnPlot(seurat_obj_filtered, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
           ncol = 6, pt.size = 0) + theme(legend.position = 'right')
@@ -264,7 +255,7 @@ for (i in seq_along(input_files)) {
 
   # Save UMI Counts vs Percent Mito for filtered data
   plot(seurat_obj_filtered$nCount_RNA, seurat_obj_filtered$percent.mt, main = "UMI Counts x Percent Mito (Filtered)", xlab = "UMI_count", ylab = "percent mito")
-  filtered_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_filtered_QC1_plots.pdf"))
+  filtered_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_filtered_QC_plots.pdf"))
   pdf(filtered_output_file)
   dev.off() 
   
@@ -273,11 +264,6 @@ for (i in seq_along(input_files)) {
   counts_data <- GetAssayData(seurat_obj_filtered, slot = 'counts')
   singleR_results <- SingleR(test = counts_data, ref = combined, labels = combined$label.main)
   seurat_obj_filtered$singleR.labels <- singleR_results$labels[match(rownames(seurat_obj_filtered@meta.data), rownames(singleR_results))]
-
-  # Save SingleR annotation plot
-  singleR_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_SingleR_annotation.pdf"))
-  pdf(singleR_output_file)
-  dev.off()  
 
   # Save filtered object with SingleR metadata
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(opt$sample_ids[i], "_SingleR_filtered.rds")))
@@ -369,8 +355,6 @@ for (i in seq_along(input_files)) {
   cds <- order_cells(cds)
 
   # Save Monocle3 trajectory plot
-  monocle_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_monocle_trajectory.pdf"))
-  pdf(monocle_output_file)
   plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE)
   plot_cells_output_file <- file.path(opt$output, paste0(opt$sample_ids[i], "_monocle_plot.pdf"))
   pdf(plot_cells_output_file)
