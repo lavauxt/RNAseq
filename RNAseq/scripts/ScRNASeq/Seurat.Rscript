@@ -342,72 +342,73 @@ for (i in seq_along(input_files)) {
   pdf(dimplot_output_file)
 
   # Plot DimPlot colored by SingleR labels
-  DimPlot(seurat_obj_filtered, group.by = "singleR.labels", label = TRUE, label.size = 3) +
-    theme(legend.position = "right")
+  print(DimPlot(seurat_obj_filtered, group.by = "singleR.labels", label = TRUE, label.size = 3) +
+    theme(legend.position = "right"))
 
   dev.off()
   # Save filtered object with SingleR metadata
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(sample_ids[i], "_SingleR_filtered.rds")))
 
+  # Additional steps: Normalization, Variable Feature Identification, Scaling, PCA
+  seurat_obj_filtered <- NormalizeData(object = seurat_obj_filtered)
+  
   # Cell Cycle Scoring and Regression (if option is enabled)
   if (opt$cell_cycle_regression) {
     # Load cell cycle genes
     s.genes <- cc.genes$s.genes
     g2m.genes <- cc.genes$g2m.genes
+    
     # Perform Cell Cycle Scoring
     seurat_obj_filtered <- CellCycleScoring(seurat_obj_filtered, s.features = s.genes, g2m.features = g2m.genes)
+    
     # Perform Cell Cycle Regression
     seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat_obj_filtered))
+    
     # Save Dim Plot as PDF
     dimplot_cellcycle_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_CellCycle.pdf"))
     pdf(dimplot_cellcycle_output_file)
-    print(DimPlot(pca_cellcycle_output_file))
+    print(DimPlot(seurat_obj_filtered, reduction = "pca"))
     dev.off()
-  }
 
   # Sex Scoring (if option is enabled)
-  if (opt$sex_scoring) {
+  } else if (opt$sex_scoring) {
+    # Perform Sex Scoring
     seurat_obj_filtered <- SexScoring(
       object = seurat_obj_filtered, 
       female.features = female.features, 
       male.features = male.features, 
       set.ident = TRUE
     )
+    
+    # Calculate Sex Difference
+    seurat_obj_filtered$Sex.Difference <- seurat_obj_filtered$Female.Score - seurat_obj_filtered$Male.Score
+    
+    # Perform Sex Regression
+    seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = "Sex.Difference", features = rownames(seurat_obj_filtered))
+    
+    # PCA Analysis on Sex-related Genes
+    PCA_sex <- RunPCA(seurat_obj_filtered, features = c(male.features, female.features))
+    
+    # Save Dimplot as PDF
+    dimplot_sex_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_Sex.pdf"))
+    pdf(dimplot_sex_output_file)
+    print(DimPlot(PCA_sex, reduction = "pca"))
+    dev.off()
 
-  # Calculate Sex Difference
-  seurat_obj_filtered$Sex.Difference <- seurat_obj_filtered$Female.Score - seurat_obj_filtered$Male.Score
-  # Perform Sex Regression
-  seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = "Sex.Difference", features = rownames(seurat_obj_filtered))
-  # PCA Analysis on Sex-related Genes
-  PCA_sex <- RunPCA(seurat_obj_filtered, features = c(male.features, female.features))
-  # Save Dimplot pdf  
-  dimplot_sex_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_Sex.pdf"))
-  pdf(dimplot_sex_output_file)
-  print(DimPlot(PCA_sex))
-  dev.off()
+  } else {
+    # Regular scaling without cell cycle or sex regression
+    seurat_obj_filtered <- ScaleData(object = seurat_obj_filtered, features = rownames(seurat_obj_filtered))
   }
 
-  # Additional steps: Normalization, Variable Feature Identification, Scaling, PCA
-  seurat_obj_filtered <- NormalizeData(object = seurat_obj_filtered)
+  # Continue with Variable Feature Identification, Scaling, and PCA
   seurat_obj_filtered <- FindVariableFeatures(object = seurat_obj_filtered)
   seurat_obj_filtered <- ScaleData(object = seurat_obj_filtered)
   seurat_obj_filtered <- RunPCA(object = seurat_obj_filtered)
 
-  # Save Elbow plot
-  elbow_output_file <- file.path(opt$output, paste0(sample_ids[i], "_ElbowPlot.pdf"))
-  pdf(elbow_output_file)
-  print(ElbowPlot(seurat_obj_filtered))
-  dev.off()
-
-  # Clustering, UMAP
-  seurat_obj_filtered <- FindNeighbors(object = seurat_obj_filtered, dims = 1:20)
-  seurat_obj_filtered <- FindClusters(object = seurat_obj_filtered)
-  seurat_obj_filtered <- RunUMAP(object = seurat_obj_filtered, dims = 1:20)
-
-  # Save Dimplot
-  dimplot_output_file <- file.path(opt$output, paste0(sample_ids[i], "_Dimplot.pdf"))
-  pdf(dimplot_output_file)
-  print(DimPlot(seurat_obj_filtered, reduction = "umap", label = TRUE, pt.size = 0.5) + theme(legend.position = 'right'))
+  # Save PCA DimPlot
+  dimplot_pca_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_PCA.pdf"))
+  pdf(dimplot_pca_output_file)
+  print(DimPlot(seurat_obj_filtered, reduction = "pca"))
   dev.off()
 
   # Save final filtered object
