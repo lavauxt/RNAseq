@@ -65,9 +65,9 @@ option_list <- list(
               help="Remove ribosomal genes from the data [default %default]", metavar="logical"),
   make_option(c("--species"), type="character", default="mouse", 
               help="Species for the analysis ('mouse' or 'human') [default %default]", metavar="character"),
-  make_option(c("--cell_cycle_regression"), type="logical", default=FALSE, 
+  make_option(c("--cell_cycle_regression"), type="logical", default=TRUE, 
               help="Perform cell cycle regression [default %default]", metavar="logical"),
-  make_option(c("--sex_scoring"), type="logical", default=FALSE, 
+  make_option(c("--sex_scoring"), type="logical", default=TRUE, 
               help="Perform sex scoring regression [default %default]", metavar="logical")
 )
 
@@ -250,7 +250,6 @@ for (i in seq_along(input_files)) {
   filter_criteria <- seurat_obj@meta.data$nFeature_RNA > opt$min_genes & 
                       seurat_obj@meta.data$nFeature_RNA < opt$max_genes
 
-
   # Apply additional filters if corresponding columns are present
   if ("percent.mt" %in% colnames(seurat_obj@meta.data)) {
     filter_criteria <- filter_criteria & seurat_obj@meta.data$percent.mt < opt$max_mito
@@ -263,7 +262,6 @@ for (i in seq_along(input_files)) {
   } else {
     cat("Warning: 'percent.housekeeping' column not found. Skipping housekeeping percentage filter.\n")
   }
-
 
   # Print the first few values of each filter criterion
   cat("First few values of nFeature_RNA:\n")
@@ -290,7 +288,6 @@ for (i in seq_along(input_files)) {
   # Check for non-NA values in the filter criteria
   cat("Number of cells passing filter criteria before subsetting: ", sum(filter_criteria), "\n")
 
-
   # Print the range of values for each filtering criterion if present
   cat("Range of nFeature_RNA: ", range(seurat_obj@meta.data$nFeature_RNA), "\n")
   cat("Range of percent.mt: ", if ("percent.mt" %in% colnames(seurat_obj@meta.data)) {
@@ -314,7 +311,6 @@ for (i in seq_along(input_files)) {
     cat("No cells meet the filtering criteria. Consider adjusting the thresholds.\n")
   }
 
-  # Perform filtering
   #if (any(filter_criteria)) {
   #  seurat_obj_filtered <- subset(seurat_obj, subset = filter_criteria)
   #  cat("Number of cells after filtering: ", ncol(seurat_obj_filtered), "\n")
@@ -329,7 +325,7 @@ for (i in seq_along(input_files)) {
   dev.off() 
 
   # Generate and save the violin plot for the unfiltered object
-  vln_filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_VlnPlots.pdf"))
+  vln_filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_filtered_VlnPlots.pdf"))
   pdf(vln_filtered_output_file, width = 10, height = 8)
   print(VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
                 ncol = 6, pt.size = 0) + theme(legend.position = 'right'))
@@ -337,10 +333,19 @@ for (i in seq_along(input_files)) {
   
   # Single R annotation
   # Add SingleR results to metadata
-  counts_data <- GetAssayData(seurat_obj_filtered, slot = 'counts')
+  counts_data <- GetAssayData(seurat_obj_filtered, layer = 'counts') 
   singleR_results <- SingleR(test = counts_data, ref = combined, labels = combined$label.main)
   seurat_obj_filtered$singleR.labels <- singleR_results$labels[match(rownames(seurat_obj_filtered@meta.data), rownames(singleR_results))]
 
+  # Print DimPlot with cell labels from SingleR
+  dimplot_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_with_SingleR_labels.pdf"))
+  pdf(dimplot_output_file)
+
+  # Plot DimPlot colored by SingleR labels
+  DimPlot(seurat_obj_filtered, group.by = "singleR.labels", label = TRUE, label.size = 3) +
+    theme(legend.position = "right")
+
+  dev.off()
   # Save filtered object with SingleR metadata
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(sample_ids[i], "_SingleR_filtered.rds")))
 
@@ -409,23 +414,28 @@ for (i in seq_along(input_files)) {
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(sample_ids[i], "_final_filtered.rds")))
 
   ### Monocle3 Analysis ###
-  # Convert Seurat object to monocle3 object
+  # Convert Seurat object to Monocle3 object
   cds <- as.cell_data_set(seurat_obj_filtered)
+
   # Preprocess the data
   cds <- preprocess_cds(cds, num_dim = 50)
+
   # Reduce dimensions using UMAP
   cds <- reduce_dimension(cds, umap.n_neighbors = 30, umap.min_dist = 0.1)
+
   # Cluster cells
   cds <- cluster_cells(cds)
+
   # Learn trajectory graph
   cds <- learn_graph(cds)
-  # Order cells in pseudotime
-  cds <- order_cells(cds)
+
+  # Specify root cells (you can also specify root_pr_nodes instead)
+  cds <- order_cells(cds, root_cells = colnames(cds)[cds@clusters$UMAP == 1])
 
   # Save Monocle3 trajectory plot
   plot_cells_output_file <- file.path(opt$output, paste0(sample_ids[i], "_monocle_plot.pdf"))
   pdf(plot_cells_output_file)
-  print(plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE))
+  plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE)
   dev.off()
 
   # Save monocle3 object
