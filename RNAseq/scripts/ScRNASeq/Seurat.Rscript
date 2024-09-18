@@ -33,7 +33,8 @@ suppressPackageStartupMessages({
   library(pheatmap)
   library(SingleR)
   library(celldex)
-  library(monocle3) 
+  library(SeuratWrappers)
+  library(monocle3)
 })
 
 # Accessing the current working directory
@@ -48,7 +49,7 @@ option_list <- list(
               help="Comma-separated list of input files", metavar="character"),
   make_option(c("-o", "--output"), type="character", default="output", 
               help="Directory to save output files", metavar="character"),
-  make_option(c("-p", "--prefix"), type = "character", default = "10X", 
+  make_option(c("-p", "--prefix"), type = "character", default = NULL, 
               help = "Project name prefix", metavar = "character"),
   make_option(c("-s", "--sample_id"), type = "character", default = "Sample", 
               help = "Comma-separated list of sample IDs", metavar = "character"),
@@ -58,7 +59,7 @@ option_list <- list(
               help="Maximum number of genes per cell [default %default]", metavar="number"),
   make_option(c("--max_mito"), type="numeric", default=15, 
               help="Maximum percentage of mitochondrial transcripts [default %default]", metavar="number"),
-  make_option(c("--min_housekeeping_expr"), type="numeric", default=55, 
+  make_option(c("--min_housekeeping_expr"), type="numeric", default=0, 
               help="Minimum expression of housekeeping genes per cell [default %default]", metavar="number"),
   make_option(c("--remove_ribo"), type="logical", default=FALSE, 
               help="Remove ribosomal genes from the data [default %default]", metavar="logical"),
@@ -303,16 +304,23 @@ for (i in seq_along(input_files)) {
     "percent.housekeeping is not present in metadata."
   }, "\n")
 
-  # Perform filtering
-  seurat_obj_filtered <- subset(seurat_obj, subset = filter_criteria)
-
-  # Perform filtering
+  # Subset manually using which
   if (any(filter_criteria)) {
-    seurat_obj_filtered <- subset(seurat_obj, subset = filter_criteria)
+    cells_to_keep <- which(filter_criteria)
+    seurat_obj_filtered <- seurat_obj[, cells_to_keep]
+    print(dim(seurat_obj_filtered))
     cat("Number of cells after filtering: ", ncol(seurat_obj_filtered), "\n")
   } else {
     cat("No cells meet the filtering criteria. Consider adjusting the thresholds.\n")
   }
+
+  # Perform filtering
+  #if (any(filter_criteria)) {
+  #  seurat_obj_filtered <- subset(seurat_obj, subset = filter_criteria)
+  #  cat("Number of cells after filtering: ", ncol(seurat_obj_filtered), "\n")
+  #} else {
+  #  cat("No cells meet the filtering criteria. Consider adjusting the thresholds.\n")
+  #}
 
   # Save UMI Counts vs Percent Mito for filtered data
   filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_filtered_QC_plots.pdf"))
@@ -348,7 +356,7 @@ for (i in seq_along(input_files)) {
     # Save Dim Plot as PDF
     dimplot_cellcycle_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_CellCycle.pdf"))
     pdf(dimplot_cellcycle_output_file)
-    DimPlot(pca_cellcycle_output_file)
+    print(DimPlot(pca_cellcycle_output_file))
     dev.off()
   }
 
@@ -370,7 +378,7 @@ for (i in seq_along(input_files)) {
   # Save Dimplot pdf  
   dimplot_sex_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_Sex.pdf"))
   pdf(dimplot_sex_output_file)
-  DimPlot(PCA_sex)
+  print(DimPlot(PCA_sex))
   dev.off()
   }
 
@@ -383,7 +391,7 @@ for (i in seq_along(input_files)) {
   # Save Elbow plot
   elbow_output_file <- file.path(opt$output, paste0(sample_ids[i], "_ElbowPlot.pdf"))
   pdf(elbow_output_file)
-  ElbowPlot(seurat_obj_filtered)
+  print(ElbowPlot(seurat_obj_filtered))
   dev.off()
 
   # Clustering, UMAP
@@ -394,7 +402,7 @@ for (i in seq_along(input_files)) {
   # Save Dimplot
   dimplot_output_file <- file.path(opt$output, paste0(sample_ids[i], "_Dimplot.pdf"))
   pdf(dimplot_output_file)
-  DimPlot(seurat_obj_filtered, reduction = "umap", label = TRUE, pt.size = 0.5) + theme(legend.position = 'right')
+  print(DimPlot(seurat_obj_filtered, reduction = "umap", label = TRUE, pt.size = 0.5) + theme(legend.position = 'right'))
   dev.off()
 
   # Save final filtered object
@@ -417,7 +425,7 @@ for (i in seq_along(input_files)) {
   # Save Monocle3 trajectory plot
   plot_cells_output_file <- file.path(opt$output, paste0(sample_ids[i], "_monocle_plot.pdf"))
   pdf(plot_cells_output_file)
-  plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE)
+  print(plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE))
   dev.off()
 
   # Save monocle3 object
