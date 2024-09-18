@@ -259,7 +259,7 @@ for (i in seq_along(input_files)) {
   VlnPlot(seurat_obj_filtered, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
           ncol = 6, pt.size = 0) + theme(legend.position = 'right')
 
-  filtered_output_file <- file.path(opt$output, paste0sample_ids[i], "_filtered_VlnPlots.pdf"))
+  filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_filtered_VlnPlots.pdf"))
   pdf(filtered_output_file)
   dev.off()  
 
