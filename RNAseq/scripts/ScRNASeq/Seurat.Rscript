@@ -225,23 +225,58 @@ for (i in seq_along(input_files)) {
   }
 
   # Plot UMI Counts vs Percent Mito
-  output_file <- file.path(opt$output, paste0(sample_ids[i], "_QC_plots.pdf"))
-  pdf(output_file)
+  qc_output_file <- file.path(opt$output, paste0(sample_ids[i], "_QC_plots.pdf"))
+  pdf(qc_output_file)
   plot(seurat_obj$nCount_RNA, seurat_obj$percent.mt, main = "UMI Counts x Percent Mito", xlab = "UMI_count", ylab = "percent mito")
   dev.off()  
 
-  # Save QC metrics as a violin plot
-  output_file <- file.path(opt$output, paste0(sample_ids[i], "_VlnPlots.pdf"))
-  pdf(output_file)
+  # Save VlnPlot
+  vln_output_file <- file.path(opt$output, paste0(sample_ids[i], "_VlnPlots.pdf"))
+  pdf(vln_output_file)
   VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
         ncol = 6, pt.size = 0) + theme(legend.position = 'right')
   dev.off() 
 
   # Filter using command-line arguments
-  seurat_obj_filtered <- subset(seurat_obj, subset = nFeature_RNA > opt$min_genes & 
-                                              nFeature_RNA < opt$max_genes & 
-                                              percent.mt < opt$max_mito & 
-                                              percent.housekeeping > opt$min_housekeeping_expr)
+  # Print basic statistics of the data before filtering
+  cat("Summary of the data before filtering:\n")
+  cat("Number of cells: ", ncol(seurat_obj), "\n")
+  cat("Number of features: ", nrow(seurat_obj), "\n")
+
+  # Print the range of values for each filtering criterion if present
+  cat("Range of nFeature_RNA: ", range(seurat_obj$nFeature_RNA), "\n")
+  cat("Range of percent.mt: ", if ("percent.mt" %in% colnames(seurat_obj@meta.data)) {
+    range(seurat_obj$percent.mt)
+  } else {
+    "percent.mt is not present in metadata."
+  }, "\n")
+  cat("Range of percent.housekeeping: ", if ("percent.housekeeping" %in% colnames(seurat_obj@meta.data)) {
+    range(seurat_obj$percent.housekeeping)
+  } else {
+    "percent.housekeeping is not present in metadata."
+  }, "\n")
+
+  # Construct the filtering criteria based on the presence of metadata columns
+  filter_criteria <- nFeature_RNA > opt$min_genes & 
+                      nFeature_RNA < opt$max_genes
+
+  if ("percent.mt" %in% colnames(seurat_obj@meta.data)) {
+    filter_criteria <- filter_criteria & percent.mt < opt$max_mito
+  }
+
+  if ("percent.housekeeping" %in% colnames(seurat_obj@meta.data)) {
+    filter_criteria <- filter_criteria & percent.housekeeping > opt$min_housekeeping_expr
+  }
+
+  # Perform filtering
+  seurat_obj_filtered <- subset(seurat_obj, subset = filter_criteria)
+
+  # Check if the filtered object is empty
+  if (ncol(seurat_obj_filtered) == 0) {
+    warning("No cells meet the filtering criteria. Consider adjusting the thresholds.")
+  } else {
+    cat("Number of cells after filtering: ", ncol(seurat_obj_filtered), "\n")
+  }
 
   # Optionally remove ribosomal genes
   if (opt$remove_ribo && length(ribo_patterns) > 0) {
@@ -255,9 +290,9 @@ for (i in seq_along(input_files)) {
   plot(seurat_obj_filtered$nCount_RNA, seurat_obj_filtered$percent.mt, main = "UMI Counts x Percent Mito (Filtered)", xlab = "UMI_count", ylab = "percent mito")
   dev.off() 
 
-  # Save QC metrics for filtered data
-  filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_filtered_VlnPlots.pdf"))
-  pdf(filtered_output_file)
+  # Save VlnPlot for filtered data
+  vln_filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_filtered_VlnPlots.pdf"))
+  pdf(vln_filtered_output_file)
   VlnPlot(seurat_obj_filtered, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
           ncol = 6, pt.size = 0) + theme(legend.position = 'right')
   dev.off()  
