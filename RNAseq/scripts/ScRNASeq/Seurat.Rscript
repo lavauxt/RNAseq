@@ -33,8 +33,6 @@ suppressPackageStartupMessages({
   library(pheatmap)
   library(SingleR)
   library(celldex)
-  library(SeuratWrappers)
-  library(monocle3)
 })
 
 current_wd <- getwd()
@@ -222,8 +220,8 @@ for (i in seq_along(input_files)) {
 
   vln_output_file <- file.path(opt$output, paste0(sample_ids[i], "_VlnPlots.pdf"))
   pdf(vln_output_file, width = 10, height = 8)
-  print(VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
-                      ncol = 6, pt.size = 0) + theme(legend.position = 'right'))
+  print(VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "%.mt", "%.ribo", "%.hb", "%.housekeeping"), 
+                      ncol = 6, pt.size = 0) + theme(legend.position = 'none'))
   dev.off()
 
   cat("Summary of the data before filtering:\n")
@@ -299,8 +297,8 @@ for (i in seq_along(input_files)) {
   # Generate and save the violin plot for the unfiltered object
   vln_filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_filtered_VlnPlots.pdf"))
   pdf(vln_filtered_output_file, width = 10, height = 8)
-  print(VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "percent.mt", "percent.ribo", "percent.hb", "percent.housekeeping"), 
-                ncol = 6, pt.size = 0) + theme(legend.position = 'right'))
+  print(VlnPlot(seurat_obj, features = c("nFeature_RNA", "nCount_RNA", "%.mt", "%.ribo", "%.hb", "%.housekeeping"), 
+                ncol = 6, pt.size = 0) + theme(legend.position = 'none'))
   dev.off()
   
   # Single R annotation added to metadata
@@ -373,66 +371,6 @@ for (i in seq_along(input_files)) {
   print(DimPlot(seurat_obj_filtered, reduction = "pca"))
   dev.off()
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(sample_ids[i], "_final_filtered.rds")))
-
-  ### Monocle3 Analysis ###
-  message('Monocle3 analysis start')
-
-  # Convert Seurat object to Monocle3 object
-  cds <- as.cell_data_set(seurat_obj_filtered)
-
-  # Preprocess the data using PCA
-  cds <- preprocess_cds(cds, num_dim = 50)
-
-  # Reduce dimensions using UMAP
-  cds <- reduce_dimension(cds, umap.n_neighbors = 30, umap.min_dist = 0.1)
-
-  # Cluster cells
-  cds <- cluster_cells(cds)
-
-  # Learn trajectory graph
-  cds <- learn_graph(cds)
-
-  # Check the structure of cds@clusters
-  print(str(cds@clusters))
-
-  # Extract cluster information from UMAP clusters
-  if ("UMAP" %in% names(cds@clusters)) {
-    umap_clusters <- cds@clusters$UMAP
-    
-    # Check if umap_clusters is a list and convert it to a vector if needed
-    if (is.list(umap_clusters)) {
-      umap_clusters <- unlist(umap_clusters)
-    }
-    
-    # Ensure umap_clusters is numeric
-    if (!is.numeric(umap_clusters)) {
-      stop("UMAP clusters are not numeric. Please check the clustering result.")
-    }
-    
-    # Specify root cells based on the first cluster (you can modify this as needed)
-    root_cells <- colnames(cds)[umap_clusters == 1]  # Cluster '1' as root
-    
-    if (length(root_cells) > 0) {
-      # Order cells in pseudotime using the specified root cells
-      cds <- order_cells(cds, root_cells = root_cells)
-      
-      # Save Monocle3 trajectory plot
-      plot_cells_output_file <- file.path(opt$output, paste0(sample_ids[i], "_monocle3_plot.pdf"))
-      pdf(plot_cells_output_file)
-      plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE)
-      dev.off()
-      
-      # Save Monocle3 object
-      saveRDS(cds, file = file.path(opt$output, paste0(sample_ids[i], "_monocle3_cds.rds")))
-    } else {
-      stop("No root cells found for the specified cluster.")
-    }
-    
-  } else {
-    stop("No UMAP clusters found in the object. Check clustering step.")
-  }
-
-  message('Monocle3 analysis end')
-
+  
 }
 cat("Processing completed for all files.\n")
