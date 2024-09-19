@@ -346,12 +346,49 @@ for (i in seq_along(input_files)) {
   
   # Cell Cycle Scoring and Regression (if option is enabled)
   if (opt$cell_cycle_regression) {
+    
+    
+    # Converting human genes to mouse equivalents using biomaRt
+    library(biomaRt)
+
+    # Load human to mouse gene orthologs
+    human_mouse_orthologs <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
+    mouse_gene_list <- useMart("ensembl", dataset = "mmusculus_gene_ensembl")
+
+    # Convert human S and G2M genes to mouse equivalents
+    s.genes.human <- cc.genes$s.genes
+    g2m.genes.human <- cc.genes$g2m.genes
+
+    # Retrieve mouse orthologs for S and G2M genes
+    s.genes.mouse <- getLDS(attributes = c("hgnc_symbol"), 
+                            filters = "hgnc_symbol", 
+                            values = s.genes.human, 
+                            mart = human_mouse_orthologs, 
+                            attributesL = c("mgi_symbol"), 
+                            martL = mouse_gene_list, 
+                            uniqueRows = TRUE)$MGI_symbol
+
+    g2m.genes.mouse <- getLDS(attributes = c("hgnc_symbol"), 
+                              filters = "hgnc_symbol", 
+                              values = g2m.genes.human, 
+                              mart = human_mouse_orthologs, 
+                              attributesL = c("mgi_symbol"), 
+                              martL = mouse_gene_list, 
+                              uniqueRows = TRUE)$MGI_symbol
+
+    # Perform Cell Cycle Scoring using mouse genes
+    seurat_obj_filtered <- CellCycleScoring(seurat_obj_filtered, 
+                                            s.features = s.genes.mouse, 
+                                            g2m.features = g2m.genes.mouse)
+    
+    
     # Load cell cycle genes
     s.genes <- cc.genes$s.genes
     g2m.genes <- cc.genes$g2m.genes
     
     # Perform Cell Cycle Scoring
     message('Cell Cycle Scoring')
+    seurat_obj_filtered <- FindVariableFeatures(object = seurat_obj_filtered)
     seurat_obj_filtered <- CellCycleScoring(seurat_obj_filtered, s.features = s.genes, g2m.features = g2m.genes)
     
     # Perform Cell Cycle Regression
@@ -382,6 +419,7 @@ for (i in seq_along(input_files)) {
     
     # Perform Sex Regression
     message('Sexe regression')
+    seurat_obj_filtered <- FindVariableFeatures(object = seurat_obj_filtered)
     seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = "Sex.Difference", features = rownames(seurat_obj_filtered))
     
     # PCA Analysis on Sex-related Genes
@@ -399,7 +437,6 @@ for (i in seq_along(input_files)) {
   }
 
   # Continue with Variable Feature Identification, Scaling, and PCA
-  seurat_obj_filtered <- FindVariableFeatures(object = seurat_obj_filtered)
   seurat_obj_filtered <- ScaleData(object = seurat_obj_filtered)
   seurat_obj_filtered <- RunPCA(object = seurat_obj_filtered)
 
@@ -413,11 +450,12 @@ for (i in seq_along(input_files)) {
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(sample_ids[i], "_final_filtered.rds")))
 
   ### Monocle3 Analysis ###
-  # Convert Seurat object to Monocle3 object
   message('Monocle3 analysis start')
+
+  # Convert Seurat object to Monocle3 object
   cds <- as.cell_data_set(seurat_obj_filtered)
 
-  # Preprocess the data
+  # Preprocess the data using PCA
   cds <- preprocess_cds(cds, num_dim = 50)
 
   # Reduce dimensions using UMAP
@@ -429,8 +467,25 @@ for (i in seq_along(input_files)) {
   # Learn trajectory graph
   cds <- learn_graph(cds)
 
-  # Specify root cells (you can also specify root_pr_nodes instead)
-  cds <- order_cells(cds, root_cells = colnames(cds)[cds@clusters$UMAP == 1])
+  # Check if UMAP clusters exist before specifying root cells
+  if (!is.null(cds@clusters$UMAP)) {
+    
+    # Extract cluster information from UMAP clusters
+    umap_clusters <- cds@clusters$UMAP
+    
+    # Specify root cells based on the first cluster (you can modify this as needed)
+    root_cells <- colnames(cds)[umap_clusters == 1]  # Cluster '1' as root
+    
+    if (length(root_cells) > 0) {
+      # Order cells in pseudotime using the specified root cells
+      cds <- order_cells(cds, root_cells = root_cells)
+    } else {
+      stop("No root cells found for the specified cluster.")
+    }
+    
+  } else {
+    stop("No UMAP clusters found in the object. Check clustering step.")
+  }
 
   # Save Monocle3 trajectory plot
   plot_cells_output_file <- file.path(opt$output, paste0(sample_ids[i], "_monocle3_plot.pdf"))
@@ -438,9 +493,12 @@ for (i in seq_along(input_files)) {
   plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE)
   dev.off()
 
-  # Save monocle3 object
+  # Save Monocle3 object
   saveRDS(cds, file = file.path(opt$output, paste0(sample_ids[i], "_monocle3_cds.rds")))
+
   message('Monocle3 analysis end')
+
+
 }
 
 cat("Processing completed for all files.\n")
