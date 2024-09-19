@@ -186,7 +186,7 @@ for (i in seq_along(input_files)) {
   
   # Import data & create Seurat object
   txi <- tximport(input_files[i], type="alevin")
-  project_name <- paste(opt$prefix, sample_ids[i], sep = "_")
+  project_name <- paste(opt$prefix, sample_ids[i], sep = "")
   
   seurat_obj <- CreateSeuratObject(counts = txi$counts, 
                                    min.cells = 3, 
@@ -344,44 +344,8 @@ for (i in seq_along(input_files)) {
   message('Normalization')
   seurat_obj_filtered <- NormalizeData(object = seurat_obj_filtered)
   
-  # Cell Cycle Scoring and Regression (if option is enabled)
-  if (opt$cell_cycle_regression) {
-    
-    
-    # Converting human genes to mouse equivalents using biomaRt
-    library(biomaRt)
-
-    # Load human to mouse gene orthologs
-    human_mouse_orthologs <- useMart("ensembl", dataset = "hsapiens_gene_ensembl")
-    mouse_gene_list <- useMart("ensembl", dataset = "mmusculus_gene_ensembl")
-
-    # Convert human S and G2M genes to mouse equivalents
-    s.genes.human <- cc.genes$s.genes
-    g2m.genes.human <- cc.genes$g2m.genes
-
-    # Retrieve mouse orthologs for S and G2M genes
-    s.genes.mouse <- getLDS(attributes = c("hgnc_symbol"), 
-                            filters = "hgnc_symbol", 
-                            values = s.genes.human, 
-                            mart = human_mouse_orthologs, 
-                            attributesL = c("mgi_symbol"), 
-                            martL = mouse_gene_list, 
-                            uniqueRows = TRUE)$MGI_symbol
-
-    g2m.genes.mouse <- getLDS(attributes = c("hgnc_symbol"), 
-                              filters = "hgnc_symbol", 
-                              values = g2m.genes.human, 
-                              mart = human_mouse_orthologs, 
-                              attributesL = c("mgi_symbol"), 
-                              martL = mouse_gene_list, 
-                              uniqueRows = TRUE)$MGI_symbol
-
-    # Perform Cell Cycle Scoring using mouse genes
-    seurat_obj_filtered <- CellCycleScoring(seurat_obj_filtered, 
-                                            s.features = s.genes.mouse, 
-                                            g2m.features = g2m.genes.mouse)
-    
-    
+  # Cell Cycle Scoring and Regression
+if (opt$cell_cycle_regression) {
     # Load cell cycle genes
     s.genes <- cc.genes$s.genes
     g2m.genes <- cc.genes$g2m.genes
@@ -402,41 +366,44 @@ for (i in seq_along(input_files)) {
     pdf(dimplot_cellcycle_output_file)
     print(DimPlot(seurat_obj_filtered, reduction = "pca"))
     dev.off()
+}
 
-  # Sex Scoring (if option is enabled)
-  } else if (opt$sex_scoring) {
-    # Perform Sex Scoring
-    message('Sexe Scoring')
-    seurat_obj_filtered <- SexScoring(
-      object = seurat_obj_filtered, 
-      female.features = female.features, 
-      male.features = male.features, 
-      set.ident = TRUE
-    )
-    
-    # Calculate Sex Difference
-    seurat_obj_filtered$Sex.Difference <- seurat_obj_filtered$Female.Score - seurat_obj_filtered$Male.Score
-    
-    # Perform Sex Regression
-    message('Sexe regression')
-    seurat_obj_filtered <- FindVariableFeatures(object = seurat_obj_filtered)
-    seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = "Sex.Difference", features = rownames(seurat_obj_filtered))
-    
-    # PCA Analysis on Sex-related Genes
-    PCA_sex <- RunPCA(seurat_obj_filtered, features = c(male.features, female.features))
-    
-    # Save Dimplot as PDF
-    dimplot_sex_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_Sex.pdf"))
-    pdf(dimplot_sex_output_file)
-    print(DimPlot(PCA_sex, reduction = "pca"))
-    dev.off()
-
-  } else {
-    # Regular scaling without cell cycle or sex regression
-    seurat_obj_filtered <- ScaleData(object = seurat_obj_filtered, features = rownames(seurat_obj_filtered))
+  # Sex Scoring and Regression
+  if (opt$sex_scoring) {
+      # Perform Sex Scoring
+      message('Sex Scoring')
+      seurat_obj_filtered <- SexScoring(
+        object = seurat_obj_filtered, 
+        female.features = female.features, 
+        male.features = male.features, 
+        set.ident = TRUE
+      )
+      
+      # Calculate Sex Difference
+      seurat_obj_filtered$Sex.Difference <- seurat_obj_filtered$Female.Score - seurat_obj_filtered$Male.Score
+      
+      # Perform Sex Regression
+      message('Sex regression')
+      seurat_obj_filtered <- FindVariableFeatures(object = seurat_obj_filtered)
+      seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = "Sex.Difference", features = rownames(seurat_obj_filtered))
+      
+      # PCA Analysis on Sex-related Genes
+      PCA_sex <- RunPCA(seurat_obj_filtered, features = c(male.features, female.features))
+      
+      # Save Dimplot as PDF
+      dimplot_sex_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_Sex.pdf"))
+      pdf(dimplot_sex_output_file)
+      print(DimPlot(PCA_sex, reduction = "pca"))
+      dev.off()
   }
 
-  # Continue with Variable Feature Identification, Scaling, and PCA
+  # Regular Scaling (if neither cell cycle nor sex scoring is enabled)
+  if (!opt$cell_cycle_regression && !opt$sex_scoring) {
+      seurat_obj_filtered <- ScaleData(object = seurat_obj_filtered, features = rownames(seurat_obj_filtered))
+}
+
+
+  # Continue with Scaling, and PCA
   seurat_obj_filtered <- ScaleData(object = seurat_obj_filtered)
   seurat_obj_filtered <- RunPCA(object = seurat_obj_filtered)
 
@@ -497,7 +464,6 @@ for (i in seq_along(input_files)) {
   saveRDS(cds, file = file.path(opt$output, paste0(sample_ids[i], "_monocle3_cds.rds")))
 
   message('Monocle3 analysis end')
-
 
 }
 
