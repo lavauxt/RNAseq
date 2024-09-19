@@ -44,7 +44,7 @@ RUN mamba create -n rtools -y -c conda-forge -c bioconda -c biobuilds -c pwwang\
 	bioconductor-pcaexplorer bioconductor-apeglm  bioconductor-dose \
 	bioconductor-pathview  bioconductor-clusterprofiler bioconductor-spia \
 	r-seurat  bioconductor-alevinqc~=1.18 bioconductor-singler~=2.4 bioconductor-celldex~=1.2 bioconductor-singlecellexperiment \
-	r-monocle3  r-harmony r-seuratwrappers \
+	r-monocle3  r-harmony r-seuratwrappers r-seuratdisk \
 	bioconductor-glmgampoi r-presto \
 	&& mamba clean -afy
 

@@ -37,11 +37,9 @@ suppressPackageStartupMessages({
   library(monocle3)
 })
 
-# Accessing the current working directory
 current_wd <- getwd()
 cat("Current working directory: ", current_wd, "\n")
 
-# Define command-line options
 option_list <- list(
   make_option(c("-d", "--dir"), type="character", default="/app/scripts/function",
               help="Directory containing .R files [default %default]", metavar="character"),
@@ -71,20 +69,13 @@ option_list <- list(
               help="Perform sex scoring regression [default %default]", metavar="logical")
 )
 
-# Parse the command-line arguments
 opt_parser <- OptionParser(option_list=option_list)
 opt <- parse_args(opt_parser)
 
-# Directory containing .R files
+# List all .R files in the specified directory & source them
 scripts_dir <- opt$dir
-
-# Output the chosen directory for debugging
 cat("Using .R scripts from directory:", scripts_dir, "\n")
-
-# List all .R files in the specified directory
 r_files <- list.files(path = scripts_dir, pattern = "\\.R$", full.names = TRUE)
-
-# Source all .R files
 if (length(r_files) > 0) {
   for (file in r_files) {
     if (file.exists(file)) {
@@ -112,16 +103,12 @@ if (length(input_files) != length(sample_ids)) {
   stop("The number of input files does not match the number of sample IDs.", call.=FALSE)
 }
 
-# Print parsed input files and sample IDs for verification
-cat("Input files: ", paste(input_files, collapse=", "), "\n")
-cat("Sample IDs: ", paste(sample_ids, collapse=", "), "\n")
-
-# Ensure output directory exists or create it
 if (!dir.exists(opt$output)) {
   dir.create(opt$output, recursive = TRUE)
 }
 
-# Additional processing can be added here using the parsed options
+cat("Input files: ", paste(input_files, collapse=", "), "\n")
+cat("Sample IDs: ", paste(sample_ids, collapse=", "), "\n")
 cat("Project prefix: ", opt$prefix, "\n")
 cat("Minimum genes per cell: ", opt$min_genes, "\n")
 cat("Maximum genes per cell: ", opt$max_genes, "\n")
@@ -209,9 +196,8 @@ for (i in seq_along(input_files)) {
       
   # Add percent expression of housekeeping genes to metadata
   if (exists("housekeeper_genes")) {
-  # Get the RNA layer (instead of using the deprecated 'slot' argument)
+  # Get the RNA layer
   rna_data <- GetAssayData(seurat_obj, assay = "RNA", layer = "counts")
-
   # Check if the housekeeping genes are present in the dataset
   common_genes <- intersect(rownames(rna_data), housekeeper_genes)
 
@@ -225,7 +211,6 @@ for (i in seq_along(input_files)) {
   warning("Housekeeping genes not defined.")
   }
 
-  # Print available metadata columns
   cat("Available metadata columns:\n")
   print(colnames(seurat_obj@meta.data))
 
@@ -241,7 +226,6 @@ for (i in seq_along(input_files)) {
                       ncol = 6, pt.size = 0) + theme(legend.position = 'right'))
   dev.off()
 
-  # Print basic statistics of the data before filtering
   cat("Summary of the data before filtering:\n")
   cat("Number of cells: ", ncol(seurat_obj), "\n")
   cat("Number of features: ", nrow(seurat_obj), "\n")
@@ -263,7 +247,6 @@ for (i in seq_along(input_files)) {
     cat("Warning: 'percent.housekeeping' column not found. Skipping housekeeping percentage filter.\n")
   }
 
-  # Print the first few values of each filter criterion
   cat("First few values of nFeature_RNA:\n")
   print(head(seurat_obj@meta.data$nFeature_RNA))
 
@@ -277,14 +260,10 @@ for (i in seq_along(input_files)) {
     print(head(seurat_obj@meta.data$percent.housekeeping))
   }
 
-  # Print the filter criteria for the first few cells
   cat("First few filter criteria values:\n")
   print(head(filter_criteria))
-
-  # Print the filter criteria to debug
   cat("Filter criteria summary:\n")
   print(summary(filter_criteria))
-
   # Check for non-NA values in the filter criteria
   cat("Number of cells passing filter criteria before subsetting: ", sum(filter_criteria), "\n")
 
@@ -311,13 +290,6 @@ for (i in seq_along(input_files)) {
     cat("No cells meet the filtering criteria. Consider adjusting the thresholds.\n")
   }
 
-  #if (any(filter_criteria)) {
-  #  seurat_obj_filtered <- subset(seurat_obj, subset = filter_criteria)
-  #  cat("Number of cells after filtering: ", ncol(seurat_obj_filtered), "\n")
-  #} else {
-  #  cat("No cells meet the filtering criteria. Consider adjusting the thresholds.\n")
-  #}
-
   # Save UMI Counts vs Percent Mito for filtered data
   filtered_output_file <- file.path(opt$output, paste0(sample_ids[i], "_filtered_QC_plots.pdf"))
   pdf(filtered_output_file)
@@ -331,8 +303,7 @@ for (i in seq_along(input_files)) {
                 ncol = 6, pt.size = 0) + theme(legend.position = 'right'))
   dev.off()
   
-  # Single R annotation
-  # Add SingleR results to metadata
+  # Single R annotation added to metadata
   counts_data <- GetAssayData(seurat_obj_filtered, layer = 'counts') 
   singleR_results <- SingleR(test = counts_data, ref = combined, labels = combined$label.main)
   seurat_obj_filtered$singleR.labels <- singleR_results$labels[match(rownames(seurat_obj_filtered@meta.data), rownames(singleR_results))]
@@ -345,32 +316,27 @@ for (i in seq_along(input_files)) {
   seurat_obj_filtered <- NormalizeData(object = seurat_obj_filtered)
   
   # Cell Cycle Scoring and Regression
-if (opt$cell_cycle_regression) {
-    # Load cell cycle genes
-    s.genes <- cc.genes$s.genes
-    g2m.genes <- cc.genes$g2m.genes
-    
-    # Perform Cell Cycle Scoring
-    message('Cell Cycle Scoring')
-    seurat_obj_filtered <- FindVariableFeatures(object = seurat_obj_filtered)
-    seurat_obj_filtered <- CellCycleScoring(seurat_obj_filtered, s.features = s.genes, g2m.features = g2m.genes)
-    
-    # Perform Cell Cycle Regression
-    message('Cell cycle regression')
-    seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat_obj_filtered))
-    
-    # Perform PCA before plotting
-    seurat_obj_filtered <- RunPCA(seurat_obj_filtered)
-    # Save Dim Plot as PDF
-    dimplot_cellcycle_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_CellCycle.pdf"))
-    pdf(dimplot_cellcycle_output_file)
-    print(DimPlot(seurat_obj_filtered, reduction = "pca"))
-    dev.off()
-}
+  if (opt$cell_cycle_regression) {
+      s.genes <- cc.genes$s.genes
+      g2m.genes <- cc.genes$g2m.genes
+      
+      message('Cell Cycle Scoring')
+      seurat_obj_filtered <- FindVariableFeatures(object = seurat_obj_filtered)
+      seurat_obj_filtered <- CellCycleScoring(seurat_obj_filtered, s.features = s.genes, g2m.features = g2m.genes)
+      
+      message('Cell cycle regression')
+      seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = c("S.Score", "G2M.Score"), features = rownames(seurat_obj_filtered))
+      
+      # Perform PCA before saving plot
+      seurat_obj_filtered <- RunPCA(seurat_obj_filtered)
+      dimplot_cellcycle_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_CellCycle.pdf"))
+      pdf(dimplot_cellcycle_output_file)
+      print(DimPlot(seurat_obj_filtered, reduction = "pca"))
+      dev.off()
+  }
 
   # Sex Scoring and Regression
   if (opt$sex_scoring) {
-      # Perform Sex Scoring
       message('Sex Scoring')
       seurat_obj_filtered <- SexScoring(
         object = seurat_obj_filtered, 
@@ -381,16 +347,12 @@ if (opt$cell_cycle_regression) {
       
       # Calculate Sex Difference
       seurat_obj_filtered$Sex.Difference <- seurat_obj_filtered$Female.Score - seurat_obj_filtered$Male.Score
-      
-      # Perform Sex Regression
       message('Sex regression')
       seurat_obj_filtered <- FindVariableFeatures(object = seurat_obj_filtered)
       seurat_obj_filtered <- ScaleData(seurat_obj_filtered, vars.to.regress = "Sex.Difference", features = rownames(seurat_obj_filtered))
       
-      # PCA Analysis on Sex-related Genes
+      # PCA Analysis on Sex-related Genes & save plot
       PCA_sex <- RunPCA(seurat_obj_filtered, features = c(male.features, female.features))
-      
-      # Save Dimplot as PDF
       dimplot_sex_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_Sex.pdf"))
       pdf(dimplot_sex_output_file)
       print(DimPlot(PCA_sex, reduction = "pca"))
@@ -400,20 +362,16 @@ if (opt$cell_cycle_regression) {
   # Regular Scaling (if neither cell cycle nor sex scoring is enabled)
   if (!opt$cell_cycle_regression && !opt$sex_scoring) {
       seurat_obj_filtered <- ScaleData(object = seurat_obj_filtered, features = rownames(seurat_obj_filtered))
-}
-
-
+  }
   # Continue with Scaling, and PCA
   seurat_obj_filtered <- ScaleData(object = seurat_obj_filtered)
   seurat_obj_filtered <- RunPCA(object = seurat_obj_filtered)
 
-  # Save PCA DimPlot
+  # Save PCA DimPlot & object
   dimplot_pca_output_file <- file.path(opt$output, paste0(sample_ids[i], "_DimPlot_PCA.pdf"))
   pdf(dimplot_pca_output_file)
   print(DimPlot(seurat_obj_filtered, reduction = "pca"))
   dev.off()
-
-  # Save final filtered object
   saveRDS(seurat_obj_filtered, file = file.path(opt$output, paste0(sample_ids[i], "_final_filtered.rds")))
 
   ### Monocle3 Analysis ###
@@ -446,6 +404,15 @@ if (opt$cell_cycle_regression) {
     if (length(root_cells) > 0) {
       # Order cells in pseudotime using the specified root cells
       cds <- order_cells(cds, root_cells = root_cells)
+      
+      # Save Monocle3 trajectory plot
+      plot_cells_output_file <- file.path(opt$output, paste0(sample_ids[i], "_monocle3_plot.pdf"))
+      pdf(plot_cells_output_file)
+      plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE)
+      dev.off()
+      
+      # Save Monocle3 object
+      saveRDS(cds, file = file.path(opt$output, paste0(sample_ids[i], "_monocle3_cds.rds")))
     } else {
       stop("No root cells found for the specified cluster.")
     }
@@ -454,17 +421,8 @@ if (opt$cell_cycle_regression) {
     stop("No UMAP clusters found in the object. Check clustering step.")
   }
 
-  # Save Monocle3 trajectory plot
-  plot_cells_output_file <- file.path(opt$output, paste0(sample_ids[i], "_monocle3_plot.pdf"))
-  pdf(plot_cells_output_file)
-  plot_cells(cds, color_cells_by = "pseudotime", label_groups_by_cluster = FALSE, label_leaves = TRUE, label_branch_points = TRUE)
-  dev.off()
-
-  # Save Monocle3 object
-  saveRDS(cds, file = file.path(opt$output, paste0(sample_ids[i], "_monocle3_cds.rds")))
-
   message('Monocle3 analysis end')
 
-}
 
+}
 cat("Processing completed for all files.\n")
