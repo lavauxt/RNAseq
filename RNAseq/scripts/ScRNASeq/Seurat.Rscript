@@ -392,11 +392,22 @@ for (i in seq_along(input_files)) {
   # Learn trajectory graph
   cds <- learn_graph(cds)
 
-  # Check if UMAP clusters exist before specifying root cells
-  if (!is.null(cds@clusters$UMAP)) {
-    
-    # Extract cluster information from UMAP clusters
+  # Check the structure of cds@clusters
+  print(str(cds@clusters))
+
+  # Extract cluster information from UMAP clusters
+  if ("UMAP" %in% names(cds@clusters)) {
     umap_clusters <- cds@clusters$UMAP
+    
+    # Check if umap_clusters is a list and convert it to a vector if needed
+    if (is.list(umap_clusters)) {
+      umap_clusters <- unlist(umap_clusters)
+    }
+    
+    # Ensure umap_clusters is numeric
+    if (!is.numeric(umap_clusters)) {
+      stop("UMAP clusters are not numeric. Please check the clustering result.")
+    }
     
     # Specify root cells based on the first cluster (you can modify this as needed)
     root_cells <- colnames(cds)[umap_clusters == 1]  # Cluster '1' as root
@@ -422,7 +433,6 @@ for (i in seq_along(input_files)) {
   }
 
   message('Monocle3 analysis end')
-
 
 }
 cat("Processing completed for all files.\n")
