@@ -1,6 +1,7 @@
-suppressPackageStartupMessages({(library(alevinQC))
-(library(eds))
-(library(optparse))
+suppressPackageStartupMessages({
+    (library(alevinQC))
+    (library(eds))
+    (library(optparse))
 })
 
 option_list<-list(

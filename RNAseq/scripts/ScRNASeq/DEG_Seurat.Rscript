@@ -16,11 +16,12 @@
 # --output: Directory to save DEG results and Monocle3 plots.
 
 # Load required libraries
-library(Seurat)
-library(monocle3)
-library(optparse)
+suppressPackageStartupMessages({
+  library(Seurat)
+  library(monocle3)
+  library(optparse)
+})
 
-# Set up command-line options
 option_list <- list(
   make_option(c("-i1", "--input1"), type = "character", default = NULL, help = "Path to the first Seurat object (RDS)", metavar = "character"),
   make_option(c("-i2", "--input2"), type = "character", default = NULL, help = "Path to the second Seurat object (RDS)", metavar = "character"),
@@ -29,20 +30,16 @@ option_list <- list(
   make_option(c("-o", "--output"), type = "character", default = "./results", help = "Output directory for DEG results and plots", metavar = "character")
 )
 
-# Parse options
 opt <- parse_args(OptionParser(option_list = option_list))
 
-# Check if input files are provided
 if (is.null(opt$input1) || is.null(opt$input2)) {
   stop("Both Seurat object inputs (--input1 and --input2) must be provided.")
 }
 
-# Create output directory if it doesn't exist
 if (!dir.exists(opt$output)) {
   dir.create(opt$output, recursive = TRUE)
 }
 
-# Load Seurat objects from RDS files
 message("Loading Seurat objects")
 seurat_obj1 <- readRDS(opt$input1)
 seurat_obj2 <- readRDS(opt$input2)
@@ -59,15 +56,10 @@ check_singleR_label <- function(seurat_obj) {
 label_type1 <- check_singleR_label(seurat_obj1)
 label_type2 <- check_singleR_label(seurat_obj2)
 
-# Merge the two Seurat objects
 message("Merging Seurat objects")
 seurat_combined <- merge(seurat_obj1, y = seurat_obj2, add.cell.ids = c(opt$group1, opt$group2))
-
-# Assign group labels to metadata based on SingleR labels
 message("Assigning group labels")
 seurat_combined$group <- ifelse(seurat_combined$SingleR == opt$group1, opt$group1, opt$group2)
-
-# Perform DEG analysis
 message("Performing differential expression analysis between ", opt$group1, " and ", opt$group2)
 Idents(seurat_combined) <- "group"
 deg_results <- FindMarkers(seurat_combined, ident.1 = opt$group1, ident.2 = opt$group2)
@@ -80,23 +72,17 @@ message("DEG results saved to ", deg_output_file)
 # Convert merged Seurat object to Monocle3 cell_data_set
 message("Converting to Monocle3 cell_data_set")
 seurat_cds <- as.cell_data_set(seurat_combined)
-
-# Preprocess the data
 seurat_cds <- preprocess_cds(seurat_cds, num_dim = 50)
-
-# Perform clustering
 seurat_cds <- cluster_cells(seurat_cds)
-
-# Learn trajectory
 seurat_cds <- learn_graph(seurat_cds)
-
-# Order cells in pseudotime
 seurat_cds <- order_cells(seurat_cds)
 
 # Save Monocle3 plot to PDF
-monocle_output_file <- file.path(opt$output, paste0("pseudotime_plot_", opt$group1, "_vs_", opt$group2, ".pdf"))
+monocle_output_file <- file.path(opt$output, paste0("Pseudotime_plot_", opt$group1, "_vs_", opt$group2, ".pdf"))
 pdf(monocle_output_file, width = 7, height = 5)
 plot_cells(seurat_cds, color_cells_by = "group")  # Using 'group' as metadata for color coding
 dev.off()
+
+saveRDS(seurat_cds, file.path(opt$output, paste0("Seurat_cds_", opt$group1, "_vs_", opt$group2, ".rds")))
 
 message("Monocle3 plot saved to ", monocle_output_file)
