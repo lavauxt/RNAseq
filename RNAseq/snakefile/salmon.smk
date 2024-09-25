@@ -1,10 +1,10 @@
 ##########################################################################
 # Snakemakefile Version:   1.0
-# Description:             Snakemake file to run Salmon alevin module
+# Description:             Snakemake file to run Salmon module
 ##########################################################################
 
 ################## Context ##################
-# launch snakemake -s  snakefile_alevin -c(numberofthreads) --config run=absolutepathoftherundirectory without / at the end of the path
+# launch snakemake -s  snakefile_count -c(numberofthreads) --config run=absolutepathoftherundirectory without / at the end of the path
 # to launch the snakemake file, use --config to replace variables that must be properly set for the pipeline to work ie run path directory
 # every variable defined in the yaml file can be change
 # separate multiple variable with a space (ex  --config run=runname var1=0.05 var2=12)
@@ -14,7 +14,7 @@
 # use --lt to display docstrings of rules
 
 # input file = fastq files
-# output file = salmon/alvevin count files (quant.sf)
+# output file = salmon count files (quant.sf)
 ################## Import libraries ##################
 
 ########## Note ########################################################################################
@@ -23,14 +23,11 @@
 # release can be change (actually v41 is used, relase is 07.2022)
 # for GRch38 primary assembly v42 : https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_41/GRCh38.primary_assembly.genome.fa.gz
 # for gencode transcripts : https://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_human/release_41/gencode.v41.transcripts.fa.gz
-# for mouse https://www.gencodegenes.org/mouse/releases.html
-# grep "^>" <(gunzip -c GRCm39.primary_assembly.genome.fa.gz) | cut -d " " -f 1 > decoys.txt
+# grep "^>" <(gunzip -c GRCh38.primary_assembly.genome.fa.gz) | cut -d " " -f 1 > decoys.txt
 # sed -i.bak -e 's/>//g' decoys.txt
-# zcat gencode.vM33.transcripts.fa.gz GRCm39.primary_assembly.genome.fa.gz > gentrome.fa.gz
+# cat gencode.v41.transcripts.fa.gz GRCh38.primary_assembly.genome.fa.gz > gentrome.fa.gz
 # salmon index -t gentrome.fa.gz -d decoys.txt -p 12 -i salmon_index --gencode
 # eventually use --keepDuplicates for isoform analysis
-# to generate the transcript/gene table
-# zgrep "^>" gentrome.fa.gz| cut -d "|" -f 1,6 --output-delimiter=$'\t' - | sed 's/>//g; s/gene_symbol://g; s/"//g' > txp2gene.tsv
 ########################################################################################################
 
 import os
@@ -43,15 +40,52 @@ from shutil import copy2
 from datetime import datetime
 from itertools import product
 from collections import defaultdict
+from jinja2 import Environment, FileSystemLoader
 
 ################## Configuration file ##################
-configfile: "/app/snakefile/alevin_default.yaml"
+configfile: "/app/config/snakefile/salmon_default.yaml"
 
 ####################### FUNCTIONS #####################
+def parse_samplesheet(samplesheet_path):
+	"""
+	samplesheet_path: absolute path of a samplesheet file, Illumina format
+	return: a dataframe containing 9 columns :
+	Sample_ID, Sample_Plate, Sample_Well, I7_Index_ID, index, Manifest, GenomeFolder, Sample_Project, Description
+	The description field contains tags separated by ! ; the name of the tag and the value is separated by # (ex: SEX#F!APP#DIAG.BBS_RP)
+	"""
+	header_line = next(line.strip().split(',') for line in open(samplesheet_path) if 'Sample_ID' in line)
+	df = pd.read_csv(samplesheet_path, skiprows=1, names=header_line)
+	df['Description'] = df['Description'].apply(lambda x: dict(item.split('#') for item in x.split('!')))
+	
+	return df
 
-def populate_dictionary(dictionary, samples_list, extensions_list, files_list, pattern_include=None, pattern_exclude=None, split_index=0):
+def getSampleInfos(samplesheet_path, exclude_samples):
+	"""
+	samplesheet_path: absolute path of a samplesheet file, Illumina format
+	return a dictionary with Sample_ID from samplesheet as key and 'gender': 'F or M or NULL'
+	"""
+	result_dict = {}
+	
+	if samplesheet_path:
+		samplesheet = parse_samplesheet(samplesheet_path)
+		
+		for _, rows in samplesheet.iterrows():
+			sampleID = rows["Sample_ID"]
+			
+			if any(exclude in sampleID for exclude in exclude_samples):
+				continue
+			
+			result_dict[sampleID] = {'gender': next((tag.split('_')[-1] for tag in rows['Description'].split('!') if 'SEX' in tag), '')}
+	
+	return result_dict
+
+def populate_dictionary(samples_list, extensions_list, files_list, pattern_include=None, pattern_exclude=None, split_index=0):
+	
+	dictionary = defaultdict(dict)
+
 	for sample in samples_list:
 		for ext in extensions_list:
+			found = False
 			for file in files_list:
 				file_parts = os.path.basename(file).split(".")
 				
@@ -63,17 +97,34 @@ def populate_dictionary(dictionary, samples_list, extensions_list, files_list, p
 				if file_base != sample or not os.path.basename(file).endswith(ext):
 					continue
 
-				if pattern_exclude and pattern_exclude in file:
+				if pattern_exclude and any(exclude in file for exclude in pattern_exclude):
 					continue
 
 				if pattern_include and pattern_include not in file:
 					continue
 
 				dictionary.setdefault(sample, {})[ext] = file
+				found = True
+				break  # Stop after the first match
+
+			if not found:
+				dictionary.setdefault(sample, {})[ext] = None
+	
+	return dictionary
 
 
-def filter_files(files_list, filter_in=None, filter_out=None):
-	return [file_name for file_name in files_list if (not filter_in or filter_in in file_name) and (not filter_out or filter_out not in file_name)]
+def filter_files(files_list, filter_in=None, filter_out=None, extensions=None):
+	filtered_files = []
+
+	for file_name in files_list:
+		if extensions and any(file_name.endswith(ext) for ext in extensions):
+			if filter_out and filter_out in file_name:
+				continue  # Skip files with both the specified extension and substring
+			if filter_in and filter_in not in file_name:
+				continue  # Skip files that do not contain the specified substring
+		filtered_files.append(file_name)
+
+	return filtered_files
 
 			
 def find_item_in_dict(sample_list, ext_list, dictionary, include_ext, exclude_ext=None):
@@ -84,17 +135,21 @@ def find_item_in_dict(sample_list, ext_list, dictionary, include_ext, exclude_ex
 		for ext in ext_list:
 			try:
 				items = dictionary.get(sample, {}).get(ext, [])
-				if include_ext in items and (exclude_ext is None or exclude_ext not in items):
-					if os.path.exists(items) and os.path.getsize(items) != 0:
-						search_result = items
+				if items is not None:
+					if include_ext in items and (exclude_ext is None or exclude_ext not in items):
+						if os.path.exists(items) and os.path.getsize(items) != 0:
+							search_result = items
 			except KeyError as e:
 				print(f"KeyError encountered: {e}")
 	
 	return search_result
 
-def searchfiles(directory, search_arg, recursive_arg):
-	""" Function to search all files in a directory, adding a search arguement append to the directory and a recursive_search options (True/False) """
-	return sorted(filter(os.path.isfile, glob.glob(directory + search_arg, recursive=recursive_arg)))
+def searchfiles(directory, search_args, recursive_arg):
+	""" Function to search all files in a directory with multiple search patterns and an option for recursive search """
+	results = []
+	for search_arg in search_args:
+		results.extend(filter(os.path.isfile, glob.glob(directory + search_arg, recursive=recursive_arg)))
+	return sorted(results)
 
 def extractlistfromfiles(file_list, ext_list, sep, position):
 	""" Function for creating list from a file list, with a specific extension, a separator and the position of the string we want to extract """
@@ -145,26 +200,27 @@ for item in log_items:
 		logging.info(f"{item[0]} {item[1]}")
 
 print(dict(runDict))
+
 ################################################## RULES ##################################################
 ruleorder: copy_fastq > bcl2convert
 
 rule all:
 	input:
-		expand(f"{resultDir}/tmp/{{sample}}/alevin/{{sample}}_alevinReport.html", sample=sample_list)
+		expand(f"{resultDir}/{{sample}}/{{sample}}.quant.sf",sample=sample_list)
 
 
 rule help:
 	"""
-	General help for alevin module
-	Launch snakemake -s  snakefile_alevin -c(numberofthreads) --config DATA_DIR=absolutepathoftherundirectory (default is data) without / at the end of the path
+	General help for salmon module
+	Launch snakemake -s salmon.smk -c(numberofthreads) --config DATA_DIR=absolutepathoftherundirectory (default is data) without / at the end of the path
 	To launch the snakemake file, use --config to replace variables that must be properly set for the pipeline to work ie run path directory
 	Every variable defined in the yaml file can be change
 	Separate multiple variable with a space (ex  --config DATA_DIR=runname transProb=0.05 var1=0.05 var2=12)
 	Also use option --configfile another.yaml to replace and merge existing config.yaml file variables
 	Use -p to display shell commands
 	Use --lt to display docstrings of rules
-	Input file = fastq from ScRNAseq (R1 barecode+umi, R2 reads)
-	Output file = quantification files
+	Input file = fastq PE (SE don't work for now)
+	Output file = quant.sf files
 	"""
 
 
@@ -196,7 +252,6 @@ rule bcl_convert:
 		"""
 
 rule copy_fastq:
-	""" Copy input files """
 	output:
 		fastqR1=temp(f"{resultDir}/{{sample}}.R1.fastq.gz"),
 		fastqR2=temp(f"{resultDir}/{{sample}}.R2.fastq.gz")
@@ -206,46 +261,58 @@ rule copy_fastq:
 		download_link2 = lambda wildcards: runDict[wildcards.sample]['.R2.fastq.gz']
 	shell: "[ \"{params.process}\" = \"ln\" ] && ln -sfn {params.download_link1} {output.fastqR1} && ln -sfn {params.download_link2} {output.fastqR2} || rsync -azvh {params.download_link1} {output.fastqR1} && rsync -azvh {params.download_link2} {output.fastqR2}"
 
-rule alevin:
+
+# https://github.com/OpenGene/fastp
+rule fastp:
 	input:
-		fastqR1=f"{resultDir}/{{sample}}.R1.fastq.gz", # BARCODE+UMI
-		fastqR2=f"{resultDir}/{{sample}}.R2.fastq.gz" # READS
+		fastqR1=f"{resultDir}/{{sample}}.R1.fastq.gz",
+		fastqR2=f"{resultDir}/{{sample}}.R2.fastq.gz"
 	output:
-		f"{resultDir}/tmp/{{sample}}.success"
+		fastqR1=temp(f"{resultDir}/{{sample}}.fastp.R1.fastq.gz"),
+		fastqR2=temp(f"{resultDir}/{{sample}}.fastp.R2.fastq.gz")
+	params:
+		miscs = config['FASTP_GLOBALS_PARAMS'],
+		compression = config['FASTP_COMPRESSION'],
+		trim = config['FASTP_TRIM'],
+		umi = config['FASTP_UMI']
+	threads: workflow.cores
+	shell:	
+		"""
+		fastp --thread={threads} {params.miscs} {params.trim} {params.umi} --compression={params.compression} --html={wildcards.sample}.QC.html --report_title={wildcards.sample} --in1={input.fastqR1} --in2={input.fastqR2} --out1={output.fastqR1} --out2={output.fastqR2} 
+		"""
+
+rule salmon:
+	input:
+		fastqR1=rules.fastp.output.fastqR1,
+		fastqR2=rules.fastp.output.fastqR2
+	output:
+		f"{resultDir}/tmp/{{sample}}.salmon.quant/quant.sf"
 	params:
 		threads = config['THREADS'],
-		index = config['SALMON_INDEX'],
-		misc_options = config['MISC_SALMON_OPTIONS'], 
-		library_type = config['ALEVIN_LIBRARY'],
-		alevindir= f"{resultDir}/tmp/{{sample}}/",
-		gene_map = config['ALEVIN_GENE_TABLE']
+		fastquantref = config['REFSALMONQUANTFASTQ_PATH'],
+		fastq_type = config['SALMON_FASTQ_TYPE'],
+		misc_options = config['MISC_SALMON_OPTIONS'],
+		salmondir= f"{resultDir}/tmp/{{sample}}.salmon.quant/"
 	shell:
 		"""
-		salmon alevin --dumpFeatures -l {params.library_type} -1 {input.fastqR1} -2 {input.fastqR2} {params.misc_options} -i {params.index} -p {params.threads} -o {params.alevindir} --tgMap {params.gene_map} && touch {output}
+		if [ "{params.fastq_type}" = 'PE' ];
+		then
+		salmon quant -p {params.threads} -i {params.fastquantref} -l A -1 {input.fastqR1} -2 {input.fastqR2} {params.misc_options} -o {params.salmondir}
+		fi
+		if [ "{params.fastq_type}" = 'SE' ];
+		then
+		salmon quant -p {params.threads} -i {params.fastquantref} -l A -r {input.fastqR1} {params.misc_options} -o {params.salmondir}
+		fi
 		"""
 
-rule alevinQC:
-	input: f"{resultDir}/tmp/{{sample}}/alevin/quants_mat.gz"
-	output: f"{resultDir}/tmp/{{sample}}/alevin/{{sample}}_alevinReport.html"
-	conda: "rtools"
-	shell: """ Rscript /app/scripts/ScRNASeq/AlevinQC.Rscript --input {input} --output {output} --sample {wildcards.sample} """
-
-rule seurat:
-	input: f"{resultDir}/tmp/{{sample}}/alevin/quants_mat.gz"
-	output: f"{resultDir}/tmp/"
-	params:
-		prefix=config['PROJECT_PREFIX'],
-		min_genes=config['MIN_GENES'],
-		max_genes=config['MAX_GENES'],
-		max_mito=config['MAX_MITO'],
-		min_housekeeping_expr=config['MIN_HOUSEKEEPING_EXPR'],
-		remove_ribo=config['REMOVE_RIBO'],
-		species=config['SPECIES']
-	conda: "rtools"
+rule rename:
+	input: rules.salmon.output
+	output: f"{resultDir}/{{sample}}/{{sample}}.quant.sf"
 	shell:
 		"""
-		Rscript /app/scripts/ScRNASeq/Seurat.Rscript --files {input} --output {output} --prefix {params.prefix} --sample_id {wildcards.sample} --min_genes {params.min_genes} --max_genes {params.max_genes} --max_mito {params.max_mito} --min_housekeeping_expr {params.min_housekeeping_expr} --remove_ribo {params.remove_ribo} --species {params.species}
+		mv {input} {output}
 		"""
+
 
 onstart:
 	shell(f"touch {os.path.join(outputDir, f'{serviceName}Running.txt')}")
@@ -269,6 +336,7 @@ onsuccess:
 	# Copy individual sample results to their respective directories
 	for sample in sample_list:
 		shell(f"cp {outputDir}/{sample}/{serviceName}/{sample}_{date_time}_{serviceName}/* {outputDir}/{sample}/{serviceName}/ || true")
+
 
 onerror:
 	include_log = config['INCLUDE_LOG_RSYNC']

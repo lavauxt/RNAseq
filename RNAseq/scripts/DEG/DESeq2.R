@@ -37,53 +37,50 @@ library(gdata)
 })
 
 ######Parsing input options and setting defaults########
-option_list<-list(
-	make_option('--input',default='data', help='Folder were the data are stored',dest='datafolder'),
-	make_option('--output',default='results', help='Folder were to save the results',dest='resultfolder'),
-	make_option('--count',default='salmon', help='Type of RNA count',dest='count'),
-	make_option('--sampletable',default='./sample_table.csv', help='Path of the sample table',dest='samtable'),
-	make_option('--compare',default='condition', help='Comparison to be analysed',dest='cond'),
-	make_option('--level2compare',default='level_to_compare', help='Level to compare with',dest='level2com'),
-	make_option('--baselevel',default='base_level', help='Base level',dest='baselvl'),
-	make_option('--annotdb',default='./database/annotations_ahb.csv', help='Annotation database',dest='annotdb'),
-	make_option('--gene',default='CD180', help='Gene name for plot construction',dest='gene'),
-	make_option('--topplot',default=30, help='Number of top gene taken into account for top plots',dest='topgene'),
-	make_option('--topheatmap',default=50, help='Number of top genes taken into account for interactive heatmap',dest='topheat'),
-	make_option('--covar',default=NULL, help='Covariable to add to the statistic model (ex batch, cell)',dest='covar'),
-	make_option('--inter',default=NULL, help='Interaction used by the statistic model, separated by a : (ex conditon:cell)',dest='inter'),
-	make_option('--shrink',default='ashr', help='Shrinking algorithm for DE analysis, choose between normal, ashr (default) or apeglm',dest='shrink'),
-	make_option('--ensembl',default='./database/EnsDb.Hsapiens.v107.tar.gz', help='Ensembl package file in .tar.gz format',dest='ensembl')
+option_list <- list(
+  make_option(c("--input"), type="character", default='data', help='Folder where the data are stored [default %default]', dest='FolderOutput'),
+  make_option(c("--output"), type="character", default='results', help='Folder where to save the results [default %default]', dest='DataInput'),
+  make_option(c("--count"), type="character", default='salmon', help='Type of RNA count [default %default]', dest='CountType'),
+  make_option(c("--sampletable"), type="character", default='./sample_table.csv', help='Path of the sample table [default %default]', dest='SampleTable'),
+  make_option(c("--compare"), type="character", default='condition', help='Comparison to be analysed [default %default]', dest='Condition2Compare'),
+  make_option(c("--level2compare"), type="character", default='level_to_compare', help='Level to compare with [default %default]', dest='level_to_compare'),
+  make_option(c("--baselevel"), type="character", default='base_level', help='Base level [default %default]', dest='base_level'),
+  make_option(c("--annotdb"), type="character", default='./database/annotations_ahb.csv', help='Annotation database [default %default]', dest='annotdbfilepath'),
+  make_option(c("--gene"), type="character", default='CD180', help='Gene name for plot construction [default %default]', dest='geneplot'),
+  make_option(c("--topplot"), type="integer", default=30, help='Number of top genes for top plots [default %default]', dest='topgene'),
+  make_option(c("--topheatmap"), type="integer", default=50, help='Number of top genes for interactive heatmap [default %default]', dest='topheatgene'),
+  make_option(c("--covar"), type="character", default=NULL, help='Covariable for the statistic model (ex batch, cell) [default %default]', dest='covariable'),
+  make_option(c("--inter"), type="character", default=NULL, help='Interaction for the statistic model, separated by a : (ex condition:cell) [default %default]', dest='interaction'),
+  make_option(c("--shrink"), type="character", default='ashr', help='Shrinking algorithm for DE analysis: normal, ashr (default), or apeglm [default %default]', dest='shrink_method'),
+  make_option(c("--ensembl"), type="character", default='./database/EnsDb.Hsapiens.v107.tar.gz', help='Ensembl package file in .tar.gz format [default %default]', dest='ensembl_package'),
 )
-opt<-parse_args(OptionParser(option_list=option_list))
 
-FolderOutput=opt$resultfolder
-DataInput=opt$datafolder
-CountType=opt$count
-SampleTable=opt$samtable
-Condition2Compare=opt$cond
-level_to_compare=opt$level2com
-base_level=opt$baselvl
-annotdbfilepath=opt$annotdb
-geneplot=opt$gene
-topgene=opt$topgene
-topheatgene=opt$topheat
-covariable=opt$covar
-interaction=opt$inter
-shrink_method=opt$shrink
-ensembl_package=opt$ensembl
+# Create the OptionParser and parse the arguments
+opt_parser <- OptionParser(option_list=option_list)
+opt <- parse_args(opt_parser)
+
+# Directly assign the options to variables
+FolderOutput = opt$FolderOutput
+DataInput = opt$DataInput
+CountType = opt$CountType
+SampleTable = opt$SampleTable
+Condition2Compare = opt$Condition2Compare
+level_to_compare = opt$level_to_compare
+base_level = opt$base_level
+annotdbfilepath = opt$annotdbfilepath
+geneplot = opt$geneplot
+topgene = opt$topgene
+topheatgene = opt$topheatgene
+covariable = opt$covariable
+interaction = opt$interaction
+shrink_method = opt$shrink_method
+ensembl_package = opt$ensembl_package
 
 ### STEP 1 ### Setup to import datas into proper files
-# Create output dir
+# Create directories
 dir.create(FolderOutput)
-dir.create(paste(FolderOutput ,"/Counts", sep = ""))
-dir.create(paste(FolderOutput ,"/FoldChanges", sep = ""))
-dir.create(paste(FolderOutput ,"/Plots", sep = ""))
-dir.create(paste(FolderOutput ,"/KEGG", sep = ""))
-dir.create(paste(FolderOutput ,"/GSEA", sep = ""))
-dir.create(paste(FolderOutput ,"/SPIA", sep = ""))
-dir.create(paste(FolderOutput ,"/QC", sep = ""))
-dir.create(paste(FolderOutput ,"/Databases", sep = ""))
-dir.create(paste(FolderOutput ,"/Log", sep = ""))
+subdirs <- c("Counts", "FoldChanges", "Plots", "KEGG", "GSEA", "SPIA", "QC", "Databases", "Log")
+sapply(subdirs, function(subdir) dir.create(file.path(FolderOutput, subdir)))
 
 # Extracting samples from sample_table
 sample_table <- read.csv(paste(SampleTable), sep=";")
