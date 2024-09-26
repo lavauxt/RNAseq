@@ -190,7 +190,6 @@ print(DESeq2Model)
 dds <- DESeqDataSetFromTximport(txi, colData = meta, design = as.formula(DESeq2Model))
 
 # Specify the base level
-# TODO condition should be a variable
 dds$condition <- relevel( dds$condition, paste(base_level))
 
 ## Pre-filtering the dataset (dds object) before DE analysis
@@ -215,7 +214,7 @@ rld <- rlog(dds, blind=TRUE)
 
 # PCA uses the top 500 most variable genes to determine the similarity of the samples
 pdf(file = paste(FolderOutput ,"PCA_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 9, height = 7)
-#pcaplot(rld, intgroup= Condition2Compare, text_labels = TRUE, ellipse = TRUE, ntop = 500 , title = "PCA plot using the top 500 variable genes")
+
 # Generate PCA plot without text labels first
 pca_plot <- pcaplot(rld, intgroup = Condition2Compare, text_labels = FALSE, ellipse = TRUE, ntop = 500, title = "PCA plot using the top 500 variable genes")
 # Add custom labels using ggrepel to avoid overlaps
@@ -311,7 +310,7 @@ if (!is.null(interaction)) {
 
 write.table(comparison, paste(FolderOutput ,"/Log/Final_Model.txt", sep = ""), sep="\t", quote=FALSE, row.names = FALSE, col.names = FALSE)
 
-# Compute res woith contrast selected
+# Compute res with contrast selected
 res <- results(dds, contrast = comparison , alpha = 0.05)
 # Save unshrunken results
 res_tableOE_unshrunken <- res 
@@ -323,7 +322,7 @@ res_tableOE_unshrunken <- res
 # For type="ashr": Specifying ashr passes along DESeq2 MLE log2 fold changes and standard errors to the ash function in the ashr package, with arguments mixcompdist="normal" and method="shrink".
 # "normal" is the 2014 DESeq2 shrinkage estimator using a Normal prior, this algorithm is out of date compared to the 2 below
 res <- lfcShrink(dds, coef = 2, type = paste(shrink_method)) # recommandation for max coeff is 4
-# Save shrunken results
+# Save shrunken results, res is now shrunken
 res_tableOE_shrunken <- res 
 # Compare unshrunken vs shrunken results with MA plot
 # MA plot shows the mean of the normalized counts versus the log2foldchanges for all genes tested. The genes that are significantly DE are colored in blue
@@ -337,10 +336,7 @@ abline(h=c(-1,1), col="dodgerblue", lwd=2) # add a blue line for +1/-1 fold chan
 dev.off()
 
 ### Step 7 ### Output significant results
-# This function reports the number of genes up- and down-regulated at the selected
-# threshold (padj/alpha), the number of genes that were tested (genes with non-zero 
-# total read count), and the number of genes not included in multiple test correction 
-# due to a low mean count
+# This function reports the number of genes up- and down-regulated at the selected threshold (padj/alpha), the number of genes that were tested (genes with non-zero total read count), and the number of genes not included in multiple test correction due to a low mean count
 
 # Turn the results object into a tibble for use with tidyverse functions
 res_tbl <- res %>%
@@ -375,13 +371,10 @@ write.table(sig_res_05_LFC1, paste(FolderOutput ,"/FoldChanges/DEgenes_sigres05_
 write.table(sig_res_05_LFCminus1, paste(FolderOutput ,"/FoldChanges/DEgenes_sigres05_LFC-1_",level_to_compare,"_vs_",base_level,".txt", sep = ""), sep="\t", quote=FALSE, row.names = FALSE, col.names = TRUE)
 
 ### Step 8 ### Visualize results: volcano plots, heatmaps, normalized counts plots of top genes...
-## 1 # Create reports from DESeq2 results with special R packages
-## RegionReport = HTML and PDF Report with visualization plots
-regionreport <- DESeq2Report(dds, project = "DE report with RegionReport", res=NULL, intgroup = Condition2Compare, outdir = FolderOutput, output = paste("RegionReport_",level_to_compare,"_vs_",base_level, sep = ""))
+## 1 # Create reports from DESeq2 results with RegionReport = HTML and PDF Report with visualization plots
+regionreport <- DESeq2Report(dds, project = "DE report with RegionReport", res=res, intgroup = Condition2Compare, outdir = FolderOutput, output = paste("RegionReport_",level_to_compare,"_vs_",base_level, sep = ""))
 
-## if res=NULL, then results will be used on dds with default parameters (last 
-## condition vs first condition). Use the "res" object created at step 6 to generate 
-## a RegionReport for the contrast of interest = replace res by is("res object", "class")
+## if res=NULL, then results will be used on dds with default parameters (last condition vs first condition). 
 
 ## 2 # Plotting significant DE genes
 ## 2.1 # Plot expression for a single gene of interest (e.g. CD180)
@@ -408,7 +401,7 @@ AllDEgenes_norm <- normalized_counts %>%
   dplyr::filter(gene %in% AllDEgenes)
 write.table(AllDEgenes_norm, paste(FolderOutput ,"/Counts/AllDEgenes_Normcounts_",level_to_compare,"_vs_",base_level,".txt", sep = "") , sep="\t", quote=FALSE, row.names = FALSE, col.names = TRUE)
 
-## Order results by padj values #res_tbl
+## Order results by padj values 
 topx_sigOE_genes <- sig_res_01 %>% 
   arrange(padj) %>% 	# Arrange rows by padj values
   pull(gene) %>% 		# Extract character vector of ordered genes
@@ -518,25 +511,19 @@ library(ggnewscale)
 # Create a gene-level dataframe 
 annotations_ahb <- genes(edb, return.type = "data.frame")  %>%
   dplyr::select(gene_id, gene_name, entrezid, gene_biotype)
-
-
 # keep the first identifier for these multiple mapping cases
 annotations_ahb$entrezid <- map(annotations_ahb$entrezid,1) %>%  unlist()
-
 # Determine the indices for the non-duplicated genes
 non_duplicates_idx <- which(duplicated(annotations_ahb$gene_name) == FALSE)
-
 # Return only the non-duplicated genes using indices
 annotations_ahb <- annotations_ahb[non_duplicates_idx, ]
-
 # Save annotations_ahb
 write.csv(as.data.frame(annotations_ahb), file= paste(FolderOutput ,"/Databases/Annotations_ahb_v107.csv", sep = ""))
-
 ## Merge the AnnotationHub dataframe with the results 
 res_ids <- left_join(res_tbl, annotations_ahb, by=c("gene"="gene_name"))
-
 ## Create background dataset for hypergeometric testing = all genes tested
 allOE_genes <- as.character(res_ids$gene)
+# sig_res_01$gene is shrunken
 sigOE_genes <- as.character(sig_res_01$gene)
 #sigOE_genes <- as.character(sig_res_05$gene)
 
@@ -556,22 +543,22 @@ write.csv(as.data.frame(cluster_summary), file= paste(FolderOutput ,"/GSEA/GO_Cl
 
 
 ## Run GO enrichment analysis for 2 fold changes only (not very accurate statistically speaking)
-sigOE_genes_2fold <- as.character(sig_res_01_LFC1$gene)
-sigOE_genes_2fold <- as.character(sig_res_01_LFCminus1$gene)
+#sigOE_genes_2fold <- as.character(sig_res_01_LFC1$gene)
+#sigOE_genes_2fold <- as.character(sig_res_01_LFCminus1$gene)
 
 # Run GO enrichment analysis (significant OE genes 2 fold within universal OE genes)
-ego2fold <- enrichGO(gene = sigOE_genes_2fold, 
-                universe = allOE_genes,
-                keyType = "SYMBOL",
-                OrgDb = org.Hs.eg.db, 
-                ont = "BP", 
-                pAdjustMethod = "BH", 
-                qvalueCutoff = 0.05, 
-                readable = F)
+#ego2fold <- enrichGO(gene = sigOE_genes_2fold, 
+#                universe = allOE_genes,
+#                keyType = "SYMBOL",
+#                OrgDb = org.Hs.eg.db, 
+#                ont = "BP", 
+#                pAdjustMethod = "BH", 
+#                qvalueCutoff = 0.05, 
+#                readable = F)
 
 ## Output results from GO analysis to a table
-cluster_summary_2fold <- as.data.frame(ego2fold)
-write.csv(as.data.frame(cluster_summary_2fold), file= paste(FolderOutput ,"/GSEA/GO_ClusterProfiler_2Fold_",level_to_compare,"_vs_",base_level,".csv", sep = ""))
+#cluster_summary_2fold <- as.data.frame(ego2fold)
+#write.csv(as.data.frame(cluster_summary_2fold), file= paste(FolderOutput ,"/GSEA/GO_ClusterProfiler_2Fold_",level_to_compare,"_vs_",base_level,".csv", sep = ""))
 
 
 ## Visualize clusterProfiler results

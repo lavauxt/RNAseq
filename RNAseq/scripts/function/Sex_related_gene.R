@@ -68,3 +68,18 @@ male_features.human <- c("XIST", "TSIX", "DDX3Y", "PRKY", "KDM5D", "RPS4Y1", "UT
 #    "Scml2", "Shroom4", "Armcx1", "Armcx2", "Armcx3", "Armcx4", "Armcx5", "Armcx6",
 #    "Bcl6", "Eda", "Iqsec2", "Map3k15", "Prps1", "Rpl10", "Sdha", "Slc9a6", "Usp27x",
 #    "Zfx", "Fmr1", "Gpr143", "Tfe3", "Amelx", "Foxp3", "Usp9x")
+
+#male.features.human <- c(
+#  "DDX3Y", "EIF2S3Y", "UTY", "KDM5D", "ZFY", "RBMY1A1", "SRY",
+#  "USP9Y", "RPS4Y1", "RPS4Y2", "ZFY2", "TMSB4Y", "TSPY1", "PRY", "VCY", 
+#  "SLC25A6", "BPY2", "DAZ1", "DAZ2", "DAZ3", "DAZ4", "TTTY14", "HSFY1"
+#)
+
+#female.features.human <- c(
+#  "XIST", "TSIX", "KDM6A", "EIF2S3X", "UTX", "DDX3X", 
+#  "KDM5C", "RLIM", "STAG2", "BTK", "HDAC6", "MECP2", "SYTL2", "TIMP1", 
+#  "XIAP", "ATP7A", "G6PD", "OGT", "TIMM17B", "CCDC22", "FHL1", "TLR7", 
+#  "SCML2", "SHROOM4", "ARMCX1", "ARMCX2", "ARMCX3", "ARMCX4", "ARMCX5", "ARMCX6",
+#  "BCL6", "EDA", "IQSEC2", "PRPS1", "RPL10", "SDHA", "SLC9A6", "USP27X",
+#  "ZFX", "FMR1", "GPR143", "TFE3", "AMELX", "FOXP3", "USP9X"
+#)
