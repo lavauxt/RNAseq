@@ -146,7 +146,7 @@ for item in log_items:
 
 print(dict(runDict))
 ################################################## RULES ##################################################
-ruleorder: copy_fastq > bcl2convert
+ruleorder: copy_fastq > bcl_convert
 
 rule all:
 	input:
@@ -167,7 +167,6 @@ rule help:
 	Output file = quantification files
 	"""
 
-
 rule bcl_convert:
 	""" Convert BCL files to FASTQ using bcl-convert """
 	input:
@@ -176,17 +175,17 @@ rule bcl_convert:
 		fastqR1 = f"{resultDir}/{{sample}}.R1.fastq.gz",
 		fastqR2 = f"{resultDir}/{{sample}}.R2.fastq.gz"
 	params:
-		threads = config['THREADS'],
 		sample_sheet = config['SAMPLE_SHEET'], 
 		output_dir = resultDir,  
 		sample_name = lambda wildcards: wildcards.sample
 		#config_file = config['BCL_CONVERT_CONFIG']  # Path to bcl-convert config JSON file
+	threads: workflow.cores
 	shell:
 		"""
 		bcl-convert --input-dir {input.bcl_dir} \
 					--output-dir {params.output_dir} \
 					--sample-sheet {params.sample_sheet} \
-					--threads {params.threads}
+					--threads {threads}
 
 		R1_fastq=$(find {params.output_dir} -type f -name "{params.sample_name}*_R1_*.fastq.gz" | head -n 1)
 		R2_fastq=$(find {params.output_dir} -type f -name "{params.sample_name}*_R2_*.fastq.gz" | head -n 1)
@@ -213,15 +212,15 @@ rule alevin:
 	output:
 		f"{resultDir}/tmp/{{sample}}.success"
 	params:
-		threads = config['THREADS'],
 		index = config['SALMON_INDEX'],
 		misc_options = config['MISC_SALMON_OPTIONS'], 
 		library_type = config['ALEVIN_LIBRARY'],
 		alevindir= f"{resultDir}/tmp/{{sample}}/",
 		gene_map = config['ALEVIN_GENE_TABLE']
+	threads: workflow.cores
 	shell:
 		"""
-		salmon alevin --dumpFeatures -l {params.library_type} -1 {input.fastqR1} -2 {input.fastqR2} {params.misc_options} -i {params.index} -p {params.threads} -o {params.alevindir} --tgMap {params.gene_map} && touch {output}
+		salmon alevin --dumpFeatures -l {params.library_type} -1 {input.fastqR1} -2 {input.fastqR2} {params.misc_options} -i {params.index} -p {threads} -o {params.alevindir} --tgMap {params.gene_map} && touch {output}
 		"""
 
 rule alevinQC:

@@ -202,7 +202,7 @@ for item in log_items:
 print(dict(runDict))
 
 ################################################## RULES ##################################################
-ruleorder: copy_fastq > bcl2convert
+ruleorder: copy_fastq > bcl_convert
 
 rule all:
 	input:
@@ -212,13 +212,10 @@ rule all:
 rule help:
 	"""
 	General help for salmon module
-	Launch snakemake -s salmon.smk -c(numberofthreads) --config DATA_DIR=absolutepathoftherundirectory (default is data) without / at the end of the path
-	To launch the snakemake file, use --config to replace variables that must be properly set for the pipeline to work ie run path directory
-	Every variable defined in the yaml file can be change
-	Separate multiple variable with a space (ex  --config DATA_DIR=runname transProb=0.05 var1=0.05 var2=12)
+	Launch snakemake -s salmon.smk -c(numberofthreads) --config DATA_DIR=absolutepathoftherundirectory
+	Separate multiple variable with a space (ex --config DATA_DIR=runname transProb=0.05 var1=0.05 var2=12)
 	Also use option --configfile another.yaml to replace and merge existing config.yaml file variables
-	Use -p to display shell commands
-	Use --lt to display docstrings of rules
+	Use -p to display shell commands, --lt to display docstrings of rules, 
 	Input file = fastq PE (SE don't work for now)
 	Output file = quant.sf files
 	"""
