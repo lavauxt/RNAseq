@@ -1,5 +1,4 @@
-# Usage example
-# Rscript Venn_plot.Rscript -f "file1.tsv,file2.tsv,file3.tsv" -c "column1,column2,column3" -o "output_venn" -t "ggvenn"
+# Rscript Venn_plot.R -f "file1.tsv,file2.tsv" -c "column1,column2" -o "output_venn" -t "ggvenn" -l "Group1,Group2"
 
 
 # Required Libraries
@@ -13,7 +12,8 @@ option_list <- list(
   make_option(c("-f", "--files"), type = "character", help = "Comma-separated list of up to four TSV files.", metavar = "files"),
   make_option(c("-o", "--output"), type = "character", default = "venn_plot", help = "Output file base name (without extension) [default= %default].", metavar = "output"),
   make_option(c("-t", "--type"), type = "character", default = "ggvenn", help = "Plot type: 'ggvenn' or 'ggVennDiagram' [default= %default].", metavar = "type"),
-  make_option(c("-c", "--columns"), type = "character", help = "Comma-separated list of column names (one per TSV file) for Venn diagram.", metavar = "columns")
+  make_option(c("-c", "--columns"), type = "character", help = "Comma-separated list of column names (one per TSV file) for Venn diagram.", metavar = "columns"),
+  make_option(c("-l", "--legend"), type = "character", help = "Comma-separated list of custom legend names for the groups (one per file).", metavar = "legend")
 )
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -58,20 +58,33 @@ load_tsv_data <- function(files, columns) {
 venn_data <- load_tsv_data(opt$files, opt$columns)
 
 # Prepare the Venn data for plotting
-venn_elements <- lapply(venn_data, function(item) item$elements)
+venn_elements <- setNames(lapply(venn_data, function(item) item$elements), names(venn_data))
+
+# Set up custom legends (if provided)
+legend_names <- NULL
+if (!is.null(opt$legend)) {
+  legend_names <- str_split(opt$legend, ",")[[1]]
+  if (length(legend_names) != length(venn_elements)) {
+    stop("Error: The number of legend names must match the number of input files.")
+  }
+  names(venn_elements) <- legend_names
+}
 
 # Generate the plot based on user preference
 if (opt$type == "ggvenn") {
-  plot <- ggvenn(venn_elements, set_names = names(venn_data))
+  plot <- ggvenn(venn_elements)
 } else if (opt$type == "ggVennDiagram") {
-  plot <- ggVennDiagram(venn_elements, category.names = names(venn_data))
+  plot <- ggVennDiagram(venn_elements, category.names = legend_names)
 } else {
   stop("Error: Invalid plot type. Choose 'ggvenn' or 'ggVennDiagram'.")
 }
 
-# Save the plot as both PDF and TIFF
-ggsave(paste0(opt$output, ".pdf"), plot, device = "pdf")
-ggsave(paste0(opt$output, ".tiff"), plot, device = "tiff")
+# Set margins to avoid cutting off the plot in PDF
+plot <- plot + theme(plot.margin = margin(1, 1, 1, 1, "cm"))
+
+# Save the plot as both PDF and TIFF with adjusted dimensions
+ggsave(paste0(opt$output, ".pdf"), plot, device = "pdf", width = 8, height = 8)
+ggsave(paste0(opt$output, ".tiff"), plot, device = "tiff", width = 8, height = 8)
 
 # Notify user of success
 message("Venn diagram saved to ", opt$output, ".pdf and ", opt$output, ".tiff")
