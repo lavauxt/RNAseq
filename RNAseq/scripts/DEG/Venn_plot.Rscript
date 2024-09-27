@@ -1,0 +1,77 @@
+# Usage example
+# Rscript Venn_plot.Rscript -f "file1.tsv,file2.tsv,file3.tsv" -c "column1,column2,column3" -o "output_venn" -t "ggvenn"
+
+
+# Required Libraries
+library(optparse)
+library(ggvenn)
+library(ggVennDiagram)
+library(tidyverse)
+
+# Define options using optparse
+option_list <- list(
+  make_option(c("-f", "--files"), type = "character", help = "Comma-separated list of up to four TSV files.", metavar = "files"),
+  make_option(c("-o", "--output"), type = "character", default = "venn_plot", help = "Output file base name (without extension) [default= %default].", metavar = "output"),
+  make_option(c("-t", "--type"), type = "character", default = "ggvenn", help = "Plot type: 'ggvenn' or 'ggVennDiagram' [default= %default].", metavar = "type"),
+  make_option(c("-c", "--columns"), type = "character", help = "Comma-separated list of column names (one per TSV file) for Venn diagram.", metavar = "columns")
+)
+
+opt_parser <- OptionParser(option_list = option_list)
+opt <- parse_args(opt_parser)
+
+# Function to load and process TSV files
+load_tsv_data <- function(files, columns) {
+  # Split files and column names by comma
+  file_list <- str_split(files, ",")[[1]]
+  column_list <- str_split(columns, ",")[[1]]
+  
+  # Check if more than 4 files or columns are provided
+  if (length(file_list) > 4 || length(column_list) > 4) {
+    stop("Error: You can only provide up to 4 files and corresponding column names.")
+  }
+  
+  # Ensure the number of files and columns match
+  if (length(file_list) != length(column_list)) {
+    stop("Error: The number of files and columns must match.")
+  }
+  
+  # Load data into list, using specified columns
+  data_list <- mapply(function(file, column) {
+    data <- read_tsv(file, col_names = TRUE)
+    
+    # Check if the specified column exists in the file
+    if (!column %in% colnames(data)) {
+      stop(paste("Error: Column", column, "not found in", file))
+    }
+    
+    # Extract the specified column and return it
+    list(column = column, elements = data[[column]])
+  }, file_list, column_list, SIMPLIFY = FALSE)
+  
+  # Name the datasets (A, B, C, D) and include column names for display
+  names(data_list) <- paste(LETTERS[1:length(data_list)], column_list, sep = ": ")
+  
+  return(data_list)
+}
+
+# Load the data
+venn_data <- load_tsv_data(opt$files, opt$columns)
+
+# Prepare the Venn data for plotting
+venn_elements <- lapply(venn_data, function(item) item$elements)
+
+# Generate the plot based on user preference
+if (opt$type == "ggvenn") {
+  plot <- ggvenn(venn_elements, set_names = names(venn_data))
+} else if (opt$type == "ggVennDiagram") {
+  plot <- ggVennDiagram(venn_elements, category.names = names(venn_data))
+} else {
+  stop("Error: Invalid plot type. Choose 'ggvenn' or 'ggVennDiagram'.")
+}
+
+# Save the plot as both PDF and TIFF
+ggsave(paste0(opt$output, ".pdf"), plot, device = "pdf")
+ggsave(paste0(opt$output, ".tiff"), plot, device = "tiff")
+
+# Notify user of success
+message("Venn diagram saved to ", opt$output, ".pdf and ", opt$output, ".tiff")
