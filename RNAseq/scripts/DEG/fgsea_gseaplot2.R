@@ -22,6 +22,7 @@ suppressPackageStartupMessages({
   library(DT)
   library(ComplexHeatmap)
   library(optparse)
+  library(enrichplot)
 })
 
 ######Parsing input options and setting defaults########
@@ -104,10 +105,16 @@ filtered_pathways_hallmark <- pathways.hallmark[filtered_pathways]
 plot_function <- function(gene_set_name) {
   gene_set <- filtered_pathways_hallmark[[gene_set_name]]
   
-  # Create the enrichment plot
-  plot <- plotEnrichment(pathway = gene_set, stats = ranks) +
-    ggtitle(paste("Enrichment Plot for: ", gene_set_name))
-  
+  # Create the enrichment plot using gseaplot2
+  plot <- gseaplot2(x = fgseaRes, geneSetID = gene_set_name, title = paste("Enrichment Plot for: ", gene_set_name)) +
+         geom_col(aes(fill = padj < 0.05)) +  # Color by p-value
+         coord_flip()                         # Flip x and y axes
+
+  # Customize the plot further (optional)
+  # plot <- plot +
+  #   scale_fill_manual(values = c("TRUE" = "blue", "FALSE" = "grey"))  # Customize color palette
+  #   theme_minimal()  # Apply a minimal theme
+
   output_file <- paste0(FolderOutput, gsub(" ", "_", gene_set_name), ".pdf")
   
   # Save the plot
