@@ -77,7 +77,7 @@ ranks <- deframe(res2)
 message('Perform fgsea analysis')
 fgseaRes <- fgseaMultilevel(pathways = pathways.fgsea, stats = ranks)
 
-message('Show in an HTML table')
+message('Save in an HTML table')
 fgseaResTidy <- fgseaRes %>%
   as_tibble() %>%
   arrange(desc(NES))
@@ -87,6 +87,33 @@ datatable_object <- fgseaResTidy %>%
   DT::datatable()
 output_file <- paste0("GSEA_Table_with_", gmt_file_name, ".html")
 saveWidget(datatable_object, file = paste(FolderOutput, output_file, sep = "/"))
+
+message('Plot the fgsea result into bareplot')
+fgseaResTidy_filtered <- fgseaResTidy %>% filter(padj < 0.05)
+fgseaResTidy_filtered$pathway <- gsub("_", " ", fgseaResTidy_filtered$pathway)
+plot <- ggplot(fgseaResTidy_filtered, aes(reorder(pathway, NES), NES)) +
+  geom_col(aes(fill = NES > 0), width = 0.5) +  # Adjust bar width if needed
+  coord_flip() +  
+  labs(x = "Pathway", y = "Normalized Enrichment Score") +
+  theme_minimal() +
+  
+  theme(
+    plot.title = element_text(face = "bold"),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold"),
+    axis.text.x = element_text(face = "bold"),
+    axis.text.y = element_text(face = "bold")  
+  ) +
+
+  # Set fill colors for positive and negative NES (less pale colors)
+  scale_fill_manual(values = c("TRUE" = "#1E90FF", "FALSE" = "#FF6347")) +  # Dodger Blue and Tomato
+
+  # Remove the fill legend
+  guides(fill = "none")
+
+# Save the plot as a PDF with adjusted dimensions (thinner plot)
+output_file <- file.path(FolderOutput, paste0("Barplot_GSEA_Table_with_", gmt_file_name, ".pdf"))
+ggsave(output_file, plot = plot, width = 6, height = 4, device = "pdf")
 
 message('Iterate over each pathway and save GSEA plots with gseaplot2')
 gene_set_ids <- gsea_results@result$ID

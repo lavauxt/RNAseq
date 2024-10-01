@@ -28,8 +28,8 @@ suppressPackageStartupMessages({
 
 ######Parsing input options and setting defaults########
 option_list <- list(
-  make_option(c("--input"), type="character", default='data', help='Folder where the data are stored [default %default]', dest='FolderOutput'),
-  make_option(c("--output"), type="character", default='results', help='Folder where to save the results [default %default]', dest='DataInput'),
+  make_option(c("--input"), type="character", default='data', help='Folder where the data are stored [default %default]', dest='DataInput'),
+  make_option(c("--output"), type="character", default='results', help='Folder where to save the results [default %default]', dest='FolderOutput'),
   make_option(c("--count"), type="character", default='salmon', help='Type of RNA count [default %default]', dest='CountType'),
   make_option(c("--sampletable"), type="character", default='./sample_table.csv', help='Path of the sample table [default %default]', dest='SampleTable'),
   make_option(c("--compare"), type="character", default='condition', help='Comparison to be analysed [default %default]', dest='Condition2Compare'),
