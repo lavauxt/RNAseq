@@ -1,9 +1,10 @@
 # Required Libraries
-library(optparse)
-library(ggvenn)
-library(ggVennDiagram)
-library(tidyverse)
-
+suppressPackageStartupMessages({
+  library(optparse)
+  library(ggvenn)
+  library(ggVennDiagram)
+  library(tidyverse)
+})
 # Define options using optparse
 option_list <- list(
   make_option(c("-f", "--files"), type = "character", help = "Comma-separated list of up to four TSV files.", metavar = "files"),
