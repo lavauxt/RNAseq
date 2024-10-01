@@ -117,9 +117,11 @@ for (i in gene_set_ids) {
     pdf_file <- paste0(FolderOutput, "/GSEA_plot_", gmt_file_name, "_", i, ".pdf")
     ggsave(filename = pdf_file, plot = p, width = 8, height = 6)
     
-    # Save as TIFF
+    # Save as TIFF with compression
     tiff_file <- paste0(FolderOutput, "/GSEA_plot_", gmt_file_name, "_", i, ".tiff")
-    ggsave(filename = tiff_file, plot = p, width = 8, height = 6, device = "tiff")
+    tiff(filename = tiff_file, width = 8, height = 6, units = "in", res = 600, compression = "lzw")
+    print(p)
+    dev.off()  
   } else {
     message(paste("Skipping pathway:", i, "due to invalid results or plotting error."))
   }
