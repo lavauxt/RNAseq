@@ -1,3 +1,8 @@
+# Workflow for Venn diagram
+
+## Authoring : T LAVAUX
+## Licence MIT
+
 # Required Libraries
 suppressPackageStartupMessages({
   library(optparse)
@@ -12,7 +17,8 @@ option_list <- list(
   make_option(c("-t", "--type"), type = "character", default = "ggvenn", help = "Plot type: 'ggvenn' or 'ggVennDiagram' [default= %default].", metavar = "type"),
   make_option(c("-c", "--columns"), type = "character", help = "Comma-separated list of column names (one per TSV file) for Venn diagram.", metavar = "columns"),
   make_option(c("-l", "--legend"), type = "character", help = "Comma-separated list of custom legend names for the groups (one per file).", metavar = "legend"),
-  make_option(c("--countlabel"), type = "character", default = "Counts", help = "Custom label for the 'Counts' legend in ggVennDiagram [default= %default].", metavar = "countlabel")
+  make_option(c("--countlabel"), type = "character", default = "Counts", help = "Custom label for the 'Counts' legend in ggVennDiagram [default= %default].", metavar = "countlabel"),
+  make_option(c("-p", "--title"), type = "character", help = "Title for the Venn diagram [default= 'Venn Diagram'].", default = "Venn Diagram", metavar = "title")
 )
 
 opt_parser <- OptionParser(option_list = option_list)
@@ -67,7 +73,7 @@ light_colors <- c("#88CCEE", "#CC6677", "#DDCC77", "#117733")
 if (opt$type == "ggvenn") {
   plot <- ggvenn(venn_elements, fill_color = light_colors, show_elements = FALSE) + 
           theme(legend.position = "none") + 
-          labs(title = paste("Venn Diagram for", paste(names(venn_elements), collapse = ", ")))
+          labs(title = opt$title)
   
 } else if (opt$type == "ggVennDiagram") {
   # Custom label for the counts (fill scale)
@@ -76,6 +82,7 @@ if (opt$type == "ggvenn") {
   # Create ggVennDiagram plot with custom count label
   plot <- ggVennDiagram(venn_elements, category.names = names(venn_elements)) +
           scale_fill_gradient(low = "lightblue", high = "lightpink", name = count_label) +
+          labs(title = opt$title) + 
           theme(legend.text = element_text(size = 10)) # Adjust legend text size
 } else {
   stop("Error: Invalid plot type. Choose 'ggvenn' or 'ggVennDiagram'.")
@@ -86,7 +93,7 @@ plot <- plot + theme(plot.margin = margin(1, 1, 1, 1, "cm"))
 
 # Save the plot as both PDF and TIFF with adjusted dimensions
 ggsave(paste0(opt$output, ".pdf"), plot, device = "pdf", width = 8, height = 8)
-ggsave(paste0(opt$output, ".tiff"), plot, device = "tiff", width = 8, height = 8)
+ggsave(paste0(opt$output, ".tiff"), plot, device = "tiff", width = 8, height = 8, compression = "lzw", dpi = 600)
 
 # Notify user of success
 message("Venn diagram saved to ", opt$output, ".pdf and ", opt$output, ".tiff")

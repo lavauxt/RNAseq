@@ -16,21 +16,15 @@ message('Start fgsea script')
 
 # Load library
 suppressPackageStartupMessages({
-  library(tidyverse)
-  library(reshape2)
-  library(dplyr)
   library(tools)
+  library(tidyverse)
   library(htmlwidgets)
-  library(maditr)
   library(ggplot2)
   library(optparse)
-
   library(fgsea)
   library(DT)
-  library(ComplexHeatmap)
-  library(DOSE)
-  library(clusterProfiler)
   library(enrichplot)
+  library(clusterProfiler)
 })
 
 ######Parsing input options and setting defaults########
@@ -115,13 +109,12 @@ for (i in gene_set_ids) {
   if (!is.null(p)) {
     # Save as PDF
     pdf_file <- paste0(FolderOutput, "/GSEA_plot_", gmt_file_name, "_", i, ".pdf")
-    ggsave(filename = pdf_file, plot = p, width = 8, height = 6)
-    
-    # Save as TIFF with compression
+    ggsave(filename = pdf_file, plot = p, device = "pdf", width = 8, height = 6)
+
+    # Save as TIFF with compression and specified DPI
     tiff_file <- paste0(FolderOutput, "/GSEA_plot_", gmt_file_name, "_", i, ".tiff")
-    tiff(filename = tiff_file, width = 8, height = 6, units = "in", res = 600, compression = "lzw")
-    print(p)
-    dev.off()  
+    ggsave(filename = tiff_file, plot = p, device = "tiff", width = 8, height = 6, 
+          compression = "lzw", dpi = 600)
   } else {
     message(paste("Skipping pathway:", i, "due to invalid results or plotting error."))
   }

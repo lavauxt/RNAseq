@@ -2,38 +2,28 @@
 # Import quantification via any tools (salmon/alevin is default tools)
 
 ## Original author : L. RIGOLOT
-## Automomatisation and maintenance : T LAVAUX
-
-# 15/09/2022 : add argparse options and refactor some code - TL
-# 01/12/2022 : add KEGG patwhay graphs - TL
-# 08/12/2022 : add Ensembl update package (v107), improve files naming & graphs (GO) - TL
-# 19/01/2022 : add covar option & update SPIA PlotP to be more robust ; refactor some code - TL
-# 02/02/2023 : add interaction option for the statistic model, sample table filter samples list from files ; some variabilisation & options added - TL
+## Current author : T LAVAUX
+## Licence MIT
 
 # Sources for reference
 # http://master.bioconductor.org/packages/release/workflows/vignettes/rnaseqGene/inst/doc/rnaseqGene.html#the-deseqdataset-object-sample-information-and-the-design-formula
 # http://bioconductor.org/packages/devel/bioc/vignettes/DESeq2/inst/doc/DESeq2.html#differential-expression-analysis
 # https://hbctraining.github.io/DGE_workshop_salmon_online/schedule/links-to-lessons.html
 # http://genomicsclass.github.io/book/pages/rnaseq_gene_level.html
-
 # Multifactor Designs in DESeq2 check https://www.youtube.com/watch?v=X6p3E-QTcUc
-
 # In DTE, differential expression between conditions is assessed at the individual transcript level, while in DTU the relative expression of the isoforms of a gene are compared between conditions; i.e. a DTU analysis aims at discovering differences in the proportions of the expressed isoforms of a gene
-
 # DTU/DTE http://bioconductor.org/packages/release/workflows/vignettes/rnaseqDTU/inst/doc/rnaseqDTU.html
-
 # IsoformSwitchAnalyzeR https://bioconductor.org/packages/release/bioc/vignettes/IsoformSwitchAnalyzeR/inst/doc/IsoformSwitchAnalyzeR.html
-
 # https://www.bioconductor.org/packages/devel/bioc/vignettes/tximeta/inst/doc/tximeta.html
 
 # Load libraries
 suppressPackageStartupMessages({
-library(ggplot2)
-library(optparse)
-library(stringr)
-library(tximport)
-library(tidyverse)
-library(gdata)
+  library(ggplot2)
+  library(optparse)
+  library(stringr)
+  library(tximport)
+  library(tidyverse)
+  library(gdata)
 })
 
 ######Parsing input options and setting defaults########
@@ -53,6 +43,7 @@ option_list <- list(
   make_option(c("--inter"), type="character", default=NULL, help='Interaction for the statistic model, separated by a : (ex condition:cell) [default %default]', dest='interaction'),
   make_option(c("--shrink"), type="character", default='ashr', help='Shrinking algorithm for DE analysis: normal, ashr (default), or apeglm [default %default]', dest='shrink_method'),
   make_option(c("--ensembl"), type="character", default='./database/EnsDb.Hsapiens.v107.tar.gz', help='Ensembl package file in .tar.gz format [default %default]', dest='ensembl_package'),
+  make_option(c("--replicate"), type="character", default=NULL, help='Replicate column name if you want to collapse replicates [default %default]', dest='replicate')
 )
 
 # Create the OptionParser and parse the arguments
@@ -75,6 +66,7 @@ covariable = opt$covariable
 interaction = opt$interaction
 shrink_method = opt$shrink_method
 ensembl_package = opt$ensembl_package
+replicate = opt$replicate
 
 ### STEP 1 ### Setup to import datas into proper files
 # Create directories
@@ -196,6 +188,12 @@ dds$condition <- relevel( dds$condition, paste(base_level))
 ## Delete row if 0 counts for all samples
 keep <- rowSums(counts(dds)) >= 1 # Keep if sum of row values >= 1 
 dds <- dds[keep,]
+
+# Collapsing replicates if replicate option is provided
+if (!is.null(replicate)) {
+  print(paste("Collapsing replicates based on column:", replicate))
+  dds <- collapseReplicates(dds, groupby=meta[[replicate]])
+}
 
 ## Other filters (select only genes with significant amount of counts in a significant number of samples)
 ## Ex : Delete row if less than 3 samples have 3 counts or less for this gene
