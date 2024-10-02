@@ -30,29 +30,35 @@ suppressPackageStartupMessages({
 ######Parsing input options and setting defaults########
 # Load DE analysis from DESeq2
 option_list <- list(
-  make_option('--input', default = 'data', help = 'DE analysis file', dest = 'datafile'),
-  make_option('--output', default = 'results', help = 'Folder where to save the results', dest = 'resultfolder'),
-  make_option('--pathway', default = '', help = 'Pathways to use, gmt file', dest = 'pathway')
+    make_option(c("-i", "--input"), type = "character", default = "input_file.tsv", 
+              help = "Input file path for DE results", metavar = "character"),
+  make_option(c("-o", "--output"), type = "character", default = "output_folder", 
+              help = "Output folder for plots", metavar = "character"),
+  make_option(c("-p", "--padj"), type = "numeric", default = 0.05, 
+              help = "Adjusted p-value cutoff for filtering", metavar = "numeric"),
+  make_option(c("-g", "--gmt"), type = "character", default = "hallmark.gmt", 
+              help = "GMT file for pathways", metavar = "character")
 )
 opt <- parse_args(OptionParser(option_list = option_list))
 
-FolderOutput <- opt$resultfolder
-DataInput <- opt$datafile
-Pathways <- opt$pathway
+output_folder <- opt$output
+input_file <- opt$input
+gmt_file_name  <- opt$gmt
+padj_cutoff <- opt$padj
 
-dir.create(FolderOutput, showWarnings = FALSE)
+dir.create(output_folder, showWarnings = FALSE)
 
-message('Load gmt')
-gmt_file_name <- file_path_sans_ext(basename(Pathways))
+message('Extract gmt file name')
+gmt_name <- file_path_sans_ext(basename(gmt_file_name))
 
 message('Load DE results')
-res <- read_tsv(paste(DataInput))
+res <- read_tsv(paste(input_file))
 
 message('Load the pathways for GSEA')
-pathways.GSEA <- read.gmt(paste(Pathways))
+pathways.GSEA <- read.gmt(paste(gmt_file_name))
 
 message('Load the pathways for fgsea')
-pathways.fgsea <- gmtPathways(paste(Pathways))
+pathways.fgsea <- gmtPathways(paste(gmt_file_name))
 
 message('Convert the res data frame to a named vector for GSEA')
 gene_list <- res$log2FoldChange
@@ -63,7 +69,7 @@ gene_list <- na.omit(gene_list)
 gene_list <- sort(gene_list, decreasing = TRUE)
 
 message('Perform GSEA analysis')
-gsea_results <- GSEA(gene_list, TERM2GENE = pathways.GSEA, pvalueCutoff = 0.05)
+gsea_results <- GSEA(gene_list, TERM2GENE = pathways.GSEA, pvalueCutoff = padj_cutoff)
 
 message('Prepare data for fgsea')
 res2 <- res %>%
@@ -85,35 +91,38 @@ datatable_object <- fgseaResTidy %>%
   dplyr::select(-leadingEdge, -ES) %>%
   arrange(padj) %>%
   DT::datatable()
-output_file <- paste0("GSEA_Table_with_", gmt_file_name, ".html")
-saveWidget(datatable_object, file = paste(FolderOutput, output_file, sep = "/"))
+output_file <- paste0("GSEA_Table_with_", gmt_name, ".html")
+saveWidget(datatable_object, file = paste(output_folder, output_file, sep = "/"))
 
-message('Plot the fgsea result into bareplot')
-fgseaResTidy_filtered <- fgseaResTidy %>% filter(padj < 0.05)
+message('Plot the fgsea result into barplot')
+# Filter significant pathways
+fgseaResTidy_filtered <- fgseaResTidy %>% filter(padj < padj_cutoff)
+# Replace underscores with spaces in pathway names
 fgseaResTidy_filtered$pathway <- gsub("_", " ", fgseaResTidy_filtered$pathway)
+# Wrap long pathway names to fit them into the plot
+fgseaResTidy_filtered$pathway <- stringr::str_wrap(fgseaResTidy_filtered$pathway, width = 60)
+# Plotting
 plot <- ggplot(fgseaResTidy_filtered, aes(reorder(pathway, NES), NES)) +
-  geom_col(aes(fill = NES > 0), width = 0.5) +  # Adjust bar width if needed
+  geom_col(aes(fill = NES > 0), width = 0.6) +  # Adjust bar width if needed
   coord_flip() +  
   labs(x = "Pathway", y = "Normalized Enrichment Score") +
   theme_minimal() +
-  
   theme(
     plot.title = element_text(face = "bold"),
     axis.title.x = element_text(face = "bold"),
     axis.title.y = element_text(face = "bold"),
     axis.text.x = element_text(face = "bold"),
-    axis.text.y = element_text(face = "bold")  
+    axis.text.y = element_text(face = "bold", size = 8),
+    plot.margin = margin(1, 1, 1, 1, "cm")
   ) +
-
   # Set fill colors for positive and negative NES (less pale colors)
   scale_fill_manual(values = c("TRUE" = "#1E90FF", "FALSE" = "#FF6347")) +  # Dodger Blue and Tomato
-
-  # Remove the fill legend
-  guides(fill = "none")
-
-# Save the plot as a PDF with adjusted dimensions (thinner plot)
-output_file <- file.path(FolderOutput, paste0("Barplot_GSEA_Table_with_", gmt_file_name, ".pdf"))
-ggsave(output_file, plot = plot, width = 6, height = 4, device = "pdf")
+  guides(fill = "none") # Remove the fill legend
+# Save the plot as a PDF with adjusted dimensions (increase height for readability)
+output_file <- file.path(output_folder, paste0("Barplot_GSEA_Table_with_", gmt_name, ".pdf"))
+num_pathways <- nrow(fgseaResTidy_filtered)
+width_adjustment <- max(8, num_pathways * 0.25)  
+ggsave(output_file, plot = plot, width = width_adjustment, height = 8, device = "pdf")
 
 message('Iterate over each pathway and save GSEA plots with gseaplot2')
 gene_set_ids <- gsea_results@result$ID
@@ -135,11 +144,11 @@ for (i in gene_set_ids) {
   # Save plots if valid
   if (!is.null(p)) {
     # Save as PDF
-    pdf_file <- paste0(FolderOutput, "/GSEA_plot_", gmt_file_name, "_", i, ".pdf")
+    pdf_file <- paste0(output_folder, "/GSEA_plot_", gmt_name, "_", i, ".pdf")
     ggsave(filename = pdf_file, plot = p, device = "pdf", width = 8, height = 6)
 
     # Save as TIFF with compression and specified DPI
-    tiff_file <- paste0(FolderOutput, "/GSEA_plot_", gmt_file_name, "_", i, ".tiff")
+    tiff_file <- paste0(output_folder, "/GSEA_plot_", gmt_name, "_", i, ".tiff")
     ggsave(filename = tiff_file, plot = p, device = "tiff", width = 8, height = 6, 
           compression = "lzw", dpi = 600)
   } else {
