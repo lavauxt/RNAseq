@@ -43,7 +43,7 @@ from collections import defaultdict
 from jinja2 import Environment, FileSystemLoader
 
 ################## Configuration file ##################
-configfile: "/app/config/snakefile/salmon_default.yaml"
+configfile: "/app/snakefile/salmon_default.yaml"
 
 ####################### FUNCTIONS #####################
 def parse_samplesheet(samplesheet_path):
