@@ -4,19 +4,19 @@
 
 # Seuratobject_sex <- SexScoring(
 # object = object, # after normalization
-# female.features = female.features, 
-# male.features = male.features, 
+# female.features = female.features.mouse, # human or mouse
+# male.features = male.features.mouse, # human or mouse
 # ctrl = NULL, 
 # set.ident = TRUE 
 # )
 
 # Use for regression
-# Seuratobject_sex$Sex.Difference <-Seuratobject_se$Female.Score - Seuratobject_se$Male.Score 
-# Seuratobject_sex_final <- ScaleData(Seuratobject_sex, vars.to.regress = "Sex.Difference", features = rownames(Seuratobject_se))
+# Seuratobject$Sex.Difference <-Seuratobject$Female.Score - Seuratobject$Male.Score 
+# Seuratobject <- ScaleData(Seuratobject, vars.to.regress = "Sex.Difference", features = rownames(Seuratobject))
 
 # display PCA
-# PCA_test_final <- RunPCA(Seuratobject_sex_final, features = c(male.features, female.features))
-# DimPlot(PCA_test_final)
+# PCA <- RunPCA(Seuratobject, features = c(male.features.mouse, female.features.mouse)) # or human
+# DimPlot(PCA)
 
 
 SexScoring <- function(
