@@ -43,7 +43,7 @@ from collections import defaultdict
 from jinja2 import Environment, FileSystemLoader
 
 ################## Configuration file ##################
-configfile: "/app/snakefile/salmon_default.yaml"
+configfile: "/app/config/snakefile/salmon_default.yaml"
 
 ####################### FUNCTIONS #####################
 def parse_samplesheet(samplesheet_path):
@@ -112,7 +112,6 @@ def populate_dictionary(samples_list, extensions_list, files_list, pattern_inclu
 	
 	return dictionary
 
-
 def filter_files(files_list, filter_in=None, filter_out=None, extensions=None):
 	filtered_files = []
 
@@ -125,8 +124,7 @@ def filter_files(files_list, filter_in=None, filter_out=None, extensions=None):
 		filtered_files.append(file_name)
 
 	return filtered_files
-
-			
+		
 def find_item_in_dict(sample_list, ext_list, dictionary, include_ext, exclude_ext=None):
 	""" Function to search in a dictionary for a non-empty file path by iterating through sample_list and ext_list with inclusion and exclusion filters """
 	search_result = ""
@@ -155,6 +153,56 @@ def extractlistfromfiles(file_list, ext_list, sep, position):
 	""" Function for creating list from a file list, with a specific extension, a separator and the position of the string we want to extract """
 	return list(set(os.path.basename(files).split(sep)[position] for files in file_list if any(files.endswith(ext) for ext in ext_list)))
 
+def replace_path(file_paths, old_substring, new_substring):
+	return [path.replace(old_substring, new_substring).lstrip("/") for path in file_paths]
+
+def generate_html_report(result_dict, run_name, service_name, sample_list, template_name, output_file='report.html'):
+	env = Environment(loader=FileSystemLoader(config['TEMPLATE_DIR']))
+	template = env.get_template(template_name)
+
+	rendered_html = template.render(
+		runDict=result_dict,
+		runName=run_name,
+		serviceName=service_name,
+		sample_list=sample_list
+	)
+
+	with open(output_file, 'w') as f:
+		f.write(rendered_html)
+
+	print(f"HTML report generated successfully: {output_file}")
+
+def update_results(dictionary, update_dictionary, keys, exclude_samples=None, exclude_keys=None):
+	"""
+	Update a dictionary and remove specified keys for certain samples.
+
+	Parameters:
+	- dictionary: Dictionary containing sample results.
+	- update_dictionary: Dictionary to be updated with results.
+	- keys: A list of keys to update.
+	- exclude_samples: List of specific samples for which to remove keys.
+	- exclude_keys: List of specific keys to remove for certain samples.
+	"""
+	if exclude_samples is None:
+		exclude_samples = []
+	if exclude_keys is None:
+		exclude_keys = []
+
+	# First, update the dictionary with results
+	for sample, results in dictionary.items():
+		if sample in update_dictionary:
+			for key, value in results.items():
+				if key in keys:
+					if key not in update_dictionary[sample]:
+						update_dictionary[sample][key] = value
+					elif update_dictionary[sample][key] is None:
+						update_dictionary[sample][key] = value
+	
+	# Then, remove the specified keys for samples in exclude_samples
+	for sample in exclude_samples:
+		if sample in update_dictionary:
+			for key in exclude_keys:
+				update_dictionary[sample].pop(key, None)  # Remove the key if it exists
 
 ### END OF FUNCTIONS ###
 serviceName = config['serviceName']
@@ -162,31 +210,44 @@ runName = os.path.basename(os.path.normpath(config['run']))
 date_time = config['DATE_TIME'] if config['DATE_TIME'] else datetime.now().strftime("%Y%m%d-%H%M%S")
 resultDir = f"/app/res/{runName}/{date_time}"
 outputDir = config['OUTPUT_DIR'] if config['OUTPUT_DIR'] else config['run']
-directories = [resultDir, outputDir]
 
+depotDir = config['DEPOT_DIR']
+if config['DEPOT_DIR'] == "depository":
+	depotDir = outputDir.replace("repository", "depository")
+
+directories = [resultDir, outputDir]
+if depotDir:  # Ensure depotDir is not an empty string
+	directories.append(depotDir)
 for directory in directories:
 	os.makedirs(directory, exist_ok=True)
 
 # Search files in repository 
 files_list = searchfiles(os.path.normpath(config['run']), config['SEARCH_ARGUMENT'],  config['RECURSIVE_SEARCH'])
-
-# Create sample list
+# Create sample  list
 sample_list = extractlistfromfiles(files_list, config['PROCESS_FILE'], '.', 0)
-
 # Exclude samples from the exclude_list , case insensitive
 sample_list = [sample for sample in sample_list if not any(sample.upper().startswith(exclude.upper()) for exclude in config['EXCLUDE_SAMPLE'])]
-
 # If filter_sample_list variable is not empty, it will force the sample list
 if config['FILTER_SAMPLE']:
+	print('[INFO] Filtering samples list')
 	sample_list = list(config['FILTER_SAMPLE'])
+	print('[INFO] Filtering of samples list done')
 
-runDict = defaultdict(dict)
-populate_dictionary(runDict, sample_list, config['EXT_INDEX_LIST'], files_list, None, 'validation')
+# For validation analyse bam will be sample.aligner.validation.bam, so we append .validation to all the aligner strings
+if config['VALIDATION_ONLY']:
+	filtered_files = filter_files(files_list, filter_in='validation', extensions=config['PROCESS_FILE'])
+	append_aligner = '.validation'
+	aligner_list = [sub + append_aligner for sub in aligner_list]
+else:
+	filtered_files = filter_files(files_list, None ,filter_out='validation', extensions=config['PROCESS_FILE'])
 
+print('[INFO] Construct the dictionary for the run')
+runDict = populate_dictionary(sample_list, config['EXT_INDEX_LIST'], filtered_files, None, ['analysis'])
+print('[INFO] Dictionary done')
+print(dict(runDict))
 # Log
 logfile = f"{resultDir}/{serviceName}.{date_time}.parameters.log"
 logging.basicConfig(filename=logfile, level=config['LOG_LEVEL'], format='%(asctime)s %(message)s')
-
 log_items = [
 	('Start of the analysis:', date_time),
 	('Analysing run:', runName),
@@ -198,8 +259,6 @@ for item in log_items:
 		logging.info(f"{item[0]}\n{'\n'.join(map(str, item[1]))}")
 	else:
 		logging.info(f"{item[0]} {item[1]}")
-
-print(dict(runDict))
 
 ################################################## RULES ##################################################
 ruleorder: copy_fastq > bcl_convert
@@ -214,12 +273,10 @@ rule help:
 	General help for salmon module
 	Launch snakemake -s salmon.smk -c(numberofthreads) --config DATA_DIR=absolutepathoftherundirectory
 	Separate multiple variable with a space (ex --config DATA_DIR=runname transProb=0.05 var1=0.05 var2=12)
-	Also use option --configfile another.yaml to replace and merge existing config.yaml file variables
-	Use -p to display shell commands, --lt to display docstrings of rules, 
+	Use -p to display shell commands, use --lt to display docstrings of rules, 
 	Input file = fastq PE (SE don't work for now)
 	Output file = quant.sf files
 	"""
-
 
 rule bcl_convert:
 	""" Convert BCL files to FASTQ using bcl-convert """
@@ -229,17 +286,17 @@ rule bcl_convert:
 		fastqR1 = f"{resultDir}/{{sample}}.R1.fastq.gz",
 		fastqR2 = f"{resultDir}/{{sample}}.R2.fastq.gz"
 	params:
-		threads = config['THREADS'],
 		sample_sheet = config['SAMPLE_SHEET'], 
 		output_dir = resultDir,  
 		sample_name = lambda wildcards: wildcards.sample
 		#config_file = config['BCL_CONVERT_CONFIG']  # Path to bcl-convert config JSON file
+	threads: workflow.cores
 	shell:
 		"""
 		bcl-convert --input-dir {input.bcl_dir} \
 					--output-dir {params.output_dir} \
 					--sample-sheet {params.sample_sheet} \
-					--threads {params.threads}
+					--threads {threads}
 
 		R1_fastq=$(find {params.output_dir} -type f -name "{params.sample_name}*_R1_*.fastq.gz" | head -n 1)
 		R2_fastq=$(find {params.output_dir} -type f -name "{params.sample_name}*_R2_*.fastq.gz" | head -n 1)
@@ -248,6 +305,7 @@ rule bcl_convert:
 		mv $R2_fastq {output.fastqR2}
 		"""
 
+
 rule copy_fastq:
 	output:
 		fastqR1=temp(f"{resultDir}/{{sample}}.R1.fastq.gz"),
@@ -255,50 +313,61 @@ rule copy_fastq:
 	params:
 		process = config['PROCESS_CMD'],
 		download_link1 = lambda wildcards: runDict[wildcards.sample]['.R1.fastq.gz'],
-		download_link2 = lambda wildcards: runDict[wildcards.sample]['.R2.fastq.gz']
-	shell: "[ \"{params.process}\" = \"ln\" ] && ln -sfn {params.download_link1} {output.fastqR1} && ln -sfn {params.download_link2} {output.fastqR2} || rsync -azvh {params.download_link1} {output.fastqR1} && rsync -azvh {params.download_link2} {output.fastqR2}"
+		download_link2 = lambda wildcards: runDict[wildcards.sample].get('.R2.fastq.gz', None)  # Use .get() to avoid KeyError
+	shell:
+		"""
+		[ \"{params.process}\" = \"ln\" ] && \
+		ln -sfn {params.download_link1} {output.fastqR1} && \
+		{output.fastqR2} && \
+		if [ -f {params.download_link2} ]; then
+			ln -sfn {params.download_link2} {output.fastqR2} || rsync -azvh {params.download_link2} {output.fastqR2};
+		else
+			echo "Warning: {params.download_link2} does not exist, proceeding with single-end data.";
+		fi
+		|| rsync -azvh {params.download_link1} {output.fastqR1}
+		"""
 
 
 # https://github.com/OpenGene/fastp
 rule fastp:
 	input:
 		fastqR1=f"{resultDir}/{{sample}}.R1.fastq.gz",
-		fastqR2=f"{resultDir}/{{sample}}.R2.fastq.gz"
+		fastqR2=lambda wildcards: f"{resultDir}/{wildcards.sample}.R2.fastq.gz" if runDict[wildcards.sample].get('.R2.fastq.gz') else None  # Make fastqR2 optional
 	output:
 		fastqR1=temp(f"{resultDir}/{{sample}}.fastp.R1.fastq.gz"),
-		fastqR2=temp(f"{resultDir}/{{sample}}.fastp.R2.fastq.gz")
+		fastqR2=temp(f"{resultDir}/{{sample}}.fastp.R2.fastq.gz") if runDict[wildcards.sample].get('.R2.fastq.gz') else None
 	params:
-		miscs = config['FASTP_GLOBALS_PARAMS'],
-		compression = config['FASTP_COMPRESSION'],
-		trim = config['FASTP_TRIM'],
-		umi = config['FASTP_UMI']
+		miscs=config['FASTP_GLOBALS_PARAMS'],
+		compression=config['FASTP_COMPRESSION'],
+		trim=config['FASTP_TRIM']
 	threads: workflow.cores
 	shell:	
 		"""
-		fastp --thread={threads} {params.miscs} {params.trim} {params.umi} --compression={params.compression} --html={wildcards.sample}.QC.html --report_title={wildcards.sample} --in1={input.fastqR1} --in2={input.fastqR2} --out1={output.fastqR1} --out2={output.fastqR2} 
+		if [ -f "{input.fastqR2}" ]; then
+			fastp --thread={threads} {params.miscs} {params.trim} --compression={params.compression} --html={wildcards.sample}.QC.html --report_title={wildcards.sample} --in1={input.fastqR1} --in2={input.fastqR2} --out1={output.fastqR1} --out2={output.fastqR2}
+		else
+			fastp --thread={threads} {params.miscs} {params.trim} --compression={params.compression} --html={wildcards.sample}.QC.html --report_title={wildcards.sample} --in1={input.fastqR1} --out1={output.fastqR1}
+		fi
 		"""
 
 rule salmon:
 	input:
 		fastqR1=rules.fastp.output.fastqR1,
-		fastqR2=rules.fastp.output.fastqR2
+		fastqR2=rules.fastp.output.fastqR2  # Ensure fastqR2 is still defined, but may not exist
 	output:
 		f"{resultDir}/tmp/{{sample}}.salmon.quant/quant.sf"
 	params:
-		threads = config['THREADS'],
-		fastquantref = config['REFSALMONQUANTFASTQ_PATH'],
-		fastq_type = config['SALMON_FASTQ_TYPE'],
+		fastquantref = config['REFSALMONINDEX_PATH'],
 		misc_options = config['MISC_SALMON_OPTIONS'],
 		salmondir= f"{resultDir}/tmp/{{sample}}.salmon.quant/"
+	threads: workflow.cores
 	shell:
 		"""
-		if [ "{params.fastq_type}" = 'PE' ];
-		then
-		salmon quant -p {params.threads} -i {params.fastquantref} -l A -1 {input.fastqR1} -2 {input.fastqR2} {params.misc_options} -o {params.salmondir}
-		fi
-		if [ "{params.fastq_type}" = 'SE' ];
-		then
-		salmon quant -p {params.threads} -i {params.fastquantref} -l A -r {input.fastqR1} {params.misc_options} -o {params.salmondir}
+		if [ -f {input.fastqR2} ]; then
+			salmon quant -p {threads} -i {params.fastquantref} -l A -1 {input.fastqR1} -2 {input.fastqR2} {params.misc_options} -o {params.salmondir};
+		else
+			echo "Warning: {input.fastqR2} does not exist, proceeding with single-end quantification.";
+			salmon quant -p {threads} -i {params.fastquantref} -l A -r {input.fastqR1} {params.misc_options} -o {params.salmondir};
 		fi
 		"""
 
@@ -327,12 +396,30 @@ onsuccess:
 	with open(logfile, "a+") as f:
 		f.write(f"End of the analysis : {date_time_end}\n")
 	
-	# Copy results to the main output directory
-	shell("rsync -azvh --include={include} --exclude='*'  {resultDir}/ {outputDir}")
+	# Generate dictionary for results
+	search_args = [arg.format(serviceName=serviceName) if '{serviceName}' in arg else arg for arg in ["/*/{serviceName}/*/*", "/*"]]
+	result_files_list = searchfiles(resultDir, search_args, False)	
+	replaced_paths = replace_path(result_files_list, resultDir, "")
+	resultDict = populate_dictionary(sample_list, config['RESULT_EXT_LIST'], replaced_paths, pattern_include=serviceName, split_index=2)	
+	update_results(runDict, resultDict, config['RESULT_EXT_LIST'])
+	generate_html_report(resultDict, runName, serviceName, sample_list, f"{serviceName}.template.html" , f"{resultDir}/{serviceName}.{date_time}.report.html")
+	copy2(config['TEMPLATE_DIR'] + '/' + serviceName + '.style.css', resultDir)
+	shell("rm -rf {resultDir}/tmp/")
 
-	# Copy individual sample results to their respective directories
+	# Clear existing output directories & copy results
+	for sample in sample_list:
+		shell(f"rm -f {outputDir}/{sample}/{serviceName}/* || true")
+	shell("rsync -azvh --include={include} --exclude='*' {resultDir}/ {outputDir}")
 	for sample in sample_list:
 		shell(f"cp {outputDir}/{sample}/{serviceName}/{sample}_{date_time}_{serviceName}/* {outputDir}/{sample}/{serviceName}/ || true")
+
+	# Optionally, perform DEPOT_DIR copy
+	if config['DEPOT_DIR'] and outputDir != depotDir:
+		for sample in sample_list:
+			shell(f"rm -f {depotDir}/{sample}/{serviceName}/* || true")
+		shell("rsync -azvh --include={include} --exclude='*' {resultDir}/ {depotDir}")
+		for sample in sample_list:
+			shell(f"cp {outputDir}/{sample}/{serviceName}/{sample}_{date_time}_{serviceName}/* {depotDir}/{sample}/{serviceName}/ || true")
 
 
 onerror:

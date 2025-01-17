@@ -25,17 +25,21 @@ from datetime import datetime
 import json
 
 ################## Configuration ##################
-configfile: "/app/snakefile/salmon_default.yaml"
+configfile: "/app/config/snakefile/salmon_default.yaml"
 ######################################################
 
 gencode_version = config['GENCODE_VERSION']
 assembly = config['ASSEMBLY']
 species = config['SPECIES']
+
 db = config['databases']
+services_folder = f"{config['services']}/{config['moduleName']}/{config['serviceName'].lower()}"
+config_folder = f"{config['config']}/{config['moduleName']}/{config['serviceName'].lower()}"
+
 date_time = config['DATE_TIME'] if config['DATE_TIME'] else datetime.now().strftime("%Y%m%d-%H%M%S")
 
 # Set up logging
-logfile = f"{config['serviceName']}.{date_time}.parameters.log"
+logfile = f"{config['serviceName']}_SETUP.{date_time}.parameters.log"
 logging.basicConfig(
 	filename=logfile,
 	level=config['LOG_LEVEL'],
@@ -44,7 +48,8 @@ logging.basicConfig(
 log_items = [
 	('Start of the analysis:', date_time),
 	('Database:', db),
-	('serviceName:', config['serviceName'])
+	('serviceName:', config['serviceName']),
+	('moduleName:', config['moduleName'])
 ]
 for item in log_items:
 	if isinstance(item[1], list):
@@ -54,8 +59,7 @@ for item in log_items:
 
 ################## Snakemake Rules ##################
 rule all:
-		input:
-			success=f"{db}/salmon/{assembly}.v{gencode_version}/salmon_index/salmon_install.success"
+	input: f"{services_folder}/cli/SETUPComplete.txt"
 
 rule download_gencode:
 	output: f"{db}/gencode/{assembly}.v{gencode_version}/gencode_DB_download.success"
@@ -83,8 +87,8 @@ rule create_salmon_index:
 		success=f"{db}/salmon/{assembly}.v{gencode_version}/salmon_index/salmon_install.success"
 	params:
 		index=f"{db}/salmon/{assembly}.v{gencode_version}/salmon_index",
-		genome=f"/app/{assembly}.primary_assembly.genome.fa.gz",
-		transcripts=f"/app/gencode.v{gencode_version}.transcripts.fa.gz"
+		genome=f"{db}/gencode/{assembly}.v{gencode_version}/{assembly}.primary_assembly.genome.fa.gz",
+		transcripts=f"{db}/gencode/{assembly}.v{gencode_version}//gencode.v{gencode_version}.transcripts.fa.gz"
 	threads: workflow.cores
 	shell:
 		"""
@@ -96,14 +100,30 @@ rule create_salmon_index:
 		touch {output.success}
 		"""
 
+rule cp:
+	input: rules.create_salmon_index.output.success
+	output: f"{services_folder}/cli/SETUPComplete.txt"
+	shell: " mkdir -p {config_folder}/listener && cp -r /app/config/module/* {config_folder}/listener && cp -r /app/config/snakefile/* {config_folder}/cli && touch {output} " 
+
+
 onstart:
+	shell(f"rm -f {services_folder}/cli/SETUPComplete.txt")
+	shell(f"touch {services_folder}/cli/SETUPRunning.txt")
 	with open(logfile, "a+") as f:
 		f.write("\nGlobal parameters of the setup for debug only\n")
 		json.dump(config, f, ensure_ascii=False, indent=2)
 		f.write("\n")
 
 onsuccess:
+	shell(f"rm -f {services_folder}/cli/SETUPRunning.txt")
+	shell(f"touch {services_folder}/cli/SETUPComplete.txt")
+
 	date_time_end = datetime.now().strftime("%Y%m%d-%H%M%S")
 	with open(logfile, "a+") as f:
 		f.write(f"End of the setup: {date_time_end}\n")
+	shell(f"cp {logfile} {services_folder}/cli/{logfile}")
 	shell(f"cp {logfile} {db}/salmon/{assembly}.v{gencode_version}/{logfile}")
+
+onerror:
+	shell(f"rm -f {services_folder}/cli/SETUPRunning.txt")
+	shell(f"touch {services_folder}/cli/SETUPFailed.txt")

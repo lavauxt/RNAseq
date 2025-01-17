@@ -45,13 +45,17 @@ from itertools import product
 from collections import defaultdict
 
 ################## Configuration file ##################
-configfile: "/app/snakefile/alevin_default.yaml"
+configfile: "/app/config/snakefile/alevin_default.yaml"
 
 ####################### FUNCTIONS #####################
 
-def populate_dictionary(dictionary, samples_list, extensions_list, files_list, pattern_include=None, pattern_exclude=None, split_index=0):
+def populate_dictionary(samples_list, extensions_list, files_list, pattern_include=None, pattern_exclude=None, split_index=0):
+	
+	dictionary = defaultdict(dict)
+
 	for sample in samples_list:
 		for ext in extensions_list:
+			found = False
 			for file in files_list:
 				file_parts = os.path.basename(file).split(".")
 				
@@ -63,19 +67,22 @@ def populate_dictionary(dictionary, samples_list, extensions_list, files_list, p
 				if file_base != sample or not os.path.basename(file).endswith(ext):
 					continue
 
-				if pattern_exclude and pattern_exclude in file:
+				if pattern_exclude and any(exclude in file for exclude in pattern_exclude):
 					continue
 
 				if pattern_include and pattern_include not in file:
 					continue
 
 				dictionary.setdefault(sample, {})[ext] = file
+				found = True
+				break  # Stop after the first match
 
+			if not found:
+				dictionary.setdefault(sample, {})[ext] = None
+	
+	return dictionary
 
-def filter_files(files_list, filter_in=None, filter_out=None):
-	return [file_name for file_name in files_list if (not filter_in or filter_in in file_name) and (not filter_out or filter_out not in file_name)]
-
-			
+		
 def find_item_in_dict(sample_list, ext_list, dictionary, include_ext, exclude_ext=None):
 	""" Function to search in a dictionary for a non-empty file path by iterating through sample_list and ext_list with inclusion and exclusion filters """
 	search_result = ""
@@ -84,21 +91,39 @@ def find_item_in_dict(sample_list, ext_list, dictionary, include_ext, exclude_ex
 		for ext in ext_list:
 			try:
 				items = dictionary.get(sample, {}).get(ext, [])
-				if include_ext in items and (exclude_ext is None or exclude_ext not in items):
-					if os.path.exists(items) and os.path.getsize(items) != 0:
-						search_result = items
+				if items is not None:
+					if include_ext in items and (exclude_ext is None or exclude_ext not in items):
+						if os.path.exists(items) and os.path.getsize(items) != 0:
+							search_result = items
 			except KeyError as e:
 				print(f"KeyError encountered: {e}")
 	
 	return search_result
 
-def searchfiles(directory, search_arg, recursive_arg):
-	""" Function to search all files in a directory, adding a search arguement append to the directory and a recursive_search options (True/False) """
-	return sorted(filter(os.path.isfile, glob.glob(directory + search_arg, recursive=recursive_arg)))
+def filter_files(files_list, filter_in=None, filter_out=None, extensions=None):
+	filtered_files = []
+
+	for file_name in files_list:
+		if extensions and any(file_name.endswith(ext) for ext in extensions):
+			if filter_out and filter_out in file_name:
+				continue  # Skip files with both the specified extension and substring
+			if filter_in and filter_in not in file_name:
+				continue  # Skip files that do not contain the specified substring
+		filtered_files.append(file_name)
+
+	return filtered_files
+
+def searchfiles(directory, search_args, recursive_arg):
+	""" Function to search all files in a directory with multiple search patterns and an option for recursive search """
+	results = []
+	for search_arg in search_args:
+		results.extend(filter(os.path.isfile, glob.glob(directory + search_arg, recursive=recursive_arg)))
+	return sorted(results)
 
 def extractlistfromfiles(file_list, ext_list, sep, position):
 	""" Function for creating list from a file list, with a specific extension, a separator and the position of the string we want to extract """
 	return list(set(os.path.basename(files).split(sep)[position] for files in file_list if any(files.endswith(ext) for ext in ext_list)))
+
 
 
 ### END OF FUNCTIONS ###
@@ -109,29 +134,43 @@ resultDir = f"/app/res/{runName}/{date_time}"
 outputDir = config['OUTPUT_DIR'] if config['OUTPUT_DIR'] else config['run']
 directories = [resultDir, outputDir]
 
+depotDir = config['DEPOT_DIR']
+if config['DEPOT_DIR'] == "depository":
+	depotDir = outputDir.replace("repository", "depository")
+
+directories = [resultDir, outputDir]
+if depotDir:  # Ensure depotDir is not an empty string
+	directories.append(depotDir)
 for directory in directories:
 	os.makedirs(directory, exist_ok=True)
 
 # Search files in repository 
 files_list = searchfiles(os.path.normpath(config['run']), config['SEARCH_ARGUMENT'],  config['RECURSIVE_SEARCH'])
-
-# Create sample list
+# Create sample  list
 sample_list = extractlistfromfiles(files_list, config['PROCESS_FILE'], '.', 0)
-
 # Exclude samples from the exclude_list , case insensitive
 sample_list = [sample for sample in sample_list if not any(sample.upper().startswith(exclude.upper()) for exclude in config['EXCLUDE_SAMPLE'])]
-
 # If filter_sample_list variable is not empty, it will force the sample list
 if config['FILTER_SAMPLE']:
+	print('[INFO] Filtering samples list')
 	sample_list = list(config['FILTER_SAMPLE'])
+	print('[INFO] Filtering of samples list done')
 
-runDict = defaultdict(dict)
-populate_dictionary(runDict, sample_list, config['EXT_INDEX_LIST'], files_list, None, 'validation')
+# For validation analyse bam will be sample.aligner.validation.bam, so we append .validation to all the aligner strings
+if config['VALIDATION_ONLY']:
+	filtered_files = filter_files(files_list, filter_in='validation', extensions=config['PROCESS_FILE'])
+	append_aligner = '.validation'
+	aligner_list = [sub + append_aligner for sub in aligner_list]
+else:
+	filtered_files = filter_files(files_list, None ,filter_out='validation', extensions=config['PROCESS_FILE'])
 
+print('[INFO] Construct the dictionary for the run')
+runDict = populate_dictionary(sample_list, config['EXT_INDEX_LIST'], filtered_files, None, ['analysis'])
+print('[INFO] Dictionary done')
+print(dict(runDict))
 # Log
 logfile = f"{resultDir}/{serviceName}.{date_time}.parameters.log"
 logging.basicConfig(filename=logfile, level=config['LOG_LEVEL'], format='%(asctime)s %(message)s')
-
 log_items = [
 	('Start of the analysis:', date_time),
 	('Analysing run:', runName),
@@ -144,13 +183,12 @@ for item in log_items:
 	else:
 		logging.info(f"{item[0]} {item[1]}")
 
-print(dict(runDict))
 ################################################## RULES ##################################################
-ruleorder: copy_fastq > bcl_convert
+ruleorder: copy_fastq > bcl_convert > alevinQC > seurat
 
 rule all:
 	input:
-		expand(f"{resultDir}/tmp/{{sample}}/alevin/{{sample}}_alevinReport.html", sample=sample_list)
+		expand(f"{resultDir}/{{sample}}/{{sample}}_alevinReport.html", sample=sample_list)
 
 
 rule help:
@@ -210,29 +248,33 @@ rule alevin:
 		fastqR1=f"{resultDir}/{{sample}}.R1.fastq.gz", # BARCODE+UMI
 		fastqR2=f"{resultDir}/{{sample}}.R2.fastq.gz" # READS
 	output:
-		f"{resultDir}/tmp/{{sample}}.success"
+		f"{resultDir}/{{sample}}/alevin/quants_mat.gz"
 	params:
 		index = config['SALMON_INDEX'],
-		misc_options = config['MISC_SALMON_OPTIONS'], 
+		misc_options = config['MISC_ALEVIN_OPTIONS'], 
 		library_type = config['ALEVIN_LIBRARY'],
-		alevindir= f"{resultDir}/tmp/{{sample}}/",
+		alevindir= f"{resultDir}/{{sample}}/",
 		gene_map = config['ALEVIN_GENE_TABLE']
 	threads: workflow.cores
 	shell:
 		"""
 		salmon alevin --dumpFeatures -l {params.library_type} -1 {input.fastqR1} -2 {input.fastqR2} {params.misc_options} -i {params.index} -p {threads} -o {params.alevindir} --tgMap {params.gene_map} && touch {output}
 		"""
+# --dumpUmiGraph --dumpOrigCounts 
 
 rule alevinQC:
-	input: f"{resultDir}/tmp/{{sample}}/alevin/quants_mat.gz"
-	output: f"{resultDir}/tmp/{{sample}}/alevin/{{sample}}_alevinReport.html"
-	conda: "rtools"
-	shell: """ Rscript /app/scripts/ScRNASeq/AlevinQC.Rscript --input {input} --output {output} --sample {wildcards.sample} """
+	input: f"{resultDir}/{{sample}}/alevin/quants_mat.gz"
+	output: f"{resultDir}/{{sample}}/{{sample}}_alevinReport.html"
+	params: scripts=config['SCRIPTS_FOLDER'],
+			folder=f"{resultDir}/{{sample}}"
+	shell: """ Rscript {params.scripts}/AlevinQC.Rscript --input {params.folder} --output {params.folder} --sample {wildcards.sample} """
 
 rule seurat:
-	input: f"{resultDir}/tmp/{{sample}}/alevin/quants_mat.gz"
-	output: f"{resultDir}/tmp/"
+	input: f"{resultDir}/{{sample}}/alevin/quants_mat.gz"
+	output: f"{resultDir}/{{sample}}/{{sample}}_Seurat_raw.rds"
 	params:
+		folder=f"{resultDir}/{{sample}}",
+		scripts=config['SCRIPTS_FOLDER'],
 		prefix=config['PROJECT_PREFIX'],
 		min_genes=config['MIN_GENES'],
 		max_genes=config['MAX_GENES'],
@@ -240,10 +282,9 @@ rule seurat:
 		min_housekeeping_expr=config['MIN_HOUSEKEEPING_EXPR'],
 		remove_ribo=config['REMOVE_RIBO'],
 		species=config['SPECIES']
-	conda: "rtools"
 	shell:
 		"""
-		Rscript /app/scripts/ScRNASeq/Seurat.Rscript --files {input} --output {output} --prefix {params.prefix} --sample_id {wildcards.sample} --min_genes {params.min_genes} --max_genes {params.max_genes} --max_mito {params.max_mito} --min_housekeeping_expr {params.min_housekeeping_expr} --remove_ribo {params.remove_ribo} --species {params.species}
+		Rscript {params.scripts}/Seurat.Rscript --files {input} --output {params.folder} --prefix {params.prefix} --sample_id {wildcards.sample} --min_genes {params.min_genes} --max_genes {params.max_genes} --max_mito {params.max_mito} --min_housekeeping_expr {params.min_housekeeping_expr} --remove_ribo {params.remove_ribo} --species {params.species}
 		"""
 
 onstart:
@@ -264,10 +305,16 @@ onsuccess:
 	
 	# Copy results to the main output directory
 	shell("rsync -azvh --include={include} --exclude='*'  {resultDir}/ {outputDir}")
-
-	# Copy individual sample results to their respective directories
 	for sample in sample_list:
 		shell(f"cp {outputDir}/{sample}/{serviceName}/{sample}_{date_time}_{serviceName}/* {outputDir}/{sample}/{serviceName}/ || true")
+	
+	# Optionally, perform DEPOT_DIR copy
+	if config['DEPOT_DIR'] and outputDir != depotDir:
+		for sample in sample_list:
+			shell(f"rm -f {depotDir}/{sample}/{serviceName}/* || true")
+		shell("rsync -azvh --include={include} --exclude='*' {resultDir}/ {depotDir}")
+		for sample in sample_list:
+			shell(f"cp {outputDir}/{sample}/{serviceName}/{sample}_{date_time}_{serviceName}/* {depotDir}/{sample}/{serviceName}/ || true")
 
 onerror:
 	include_log = config['INCLUDE_LOG_RSYNC']
