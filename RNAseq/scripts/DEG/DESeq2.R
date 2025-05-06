@@ -454,12 +454,13 @@ heatmaply(mat, file =  paste(FolderOutput ,"HeatMap_Top",topheatgene,"_genes_",l
 
 ## 4 # Volcano plot (EnhancedVolcano)
 message('Volcano plots')
+title_name <- paste(level_to_compare, "_vs_", base_level, sep = "")
 pdf(file= paste(FolderOutput ,"/Plots/DE_Volcanoplot_All_Genes_",level_to_compare,"_vs_",base_level,".pdf", sep = ""))
 EnhancedVolcano(sig_res_01,
                 lab = sig_res_01$gene,
                 x = 'log2FoldChange',
                 y = 'pvalue',
-                title = 'DE_Volcanoplot',
+                title = title_name,
                 pCutoff = 0.01,
                 FCcutoff = 1.0,
                 pointSize = 2.0,
@@ -565,37 +566,58 @@ write.csv(as.data.frame(cluster_summary), file= paste(FolderOutput ,"/GSEA/GO_Cl
 #write.csv(as.data.frame(cluster_summary_2fold), file= paste(FolderOutput ,"/GSEA/GO_ClusterProfiler_2Fold_",level_to_compare,"_vs_",base_level,".csv", sep = ""))
 
 ## Visualize clusterProfiler results
-message('Ploting Cluster Profiler results')
-pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Dotplot_Top",topgene,level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
-dotplot(ego, showCategory=topgene, font.size = 10)
-dev.off()
+message('Plotting Cluster Profiler results')
+
+# Check if there are enough genes for dotplot
+if (length(ego@result$ID) > 5) {  # Set a threshold (e.g., 5 categories or genes)
+  pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Dotplot_Top",topgene,level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
+  dotplot(ego, showCategory=topgene, font.size = 10)
+  dev.off()
+} else {
+  message("Not enough genes for dotplot. Skipping...")
+}
 
 # Enrichmap #
 # Add similarity matrix to the terms in slot of enrichment result
 ego <- enrichplot::pairwise_termsim(ego)
-# Enrichmap clusters the x most significant (by padj) GO terms to visualize relationships between terms
-pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Enrichmap_Top_",topgene,"_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
-emapplot(ego, showCategory = topgene)
-dev.off()
+
+# Check if there are enough genes for emapplot
+if (length(ego@result$ID) > 5) {  # Check for the minimum number of terms to plot
+  pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Enrichmap_Top_",topgene,"_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
+  emapplot(ego, showCategory = topgene)
+  dev.off()
+} else {
+  message("Not enough genes for enrichmap. Skipping...")
+}
 
 # Category netplot #
-# To color genes by log2 fold changes, we need to extract the log2 fold changes from our results table creating a named vector
+# To color genes by log2 fold changes, we need to extract the log2 fold changes from our results table
 sigOE <- dplyr::filter(res_ids, padj < 0.01)
 OE_foldchanges <- sigOE$log2FoldChange
 names(OE_foldchanges) <- sigOE$gene
-# Cnetplot details the genes associated with one or more terms - by default gives the top 5 significant terms (by padj)
-pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Category_Netplot_All_Genes_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
-cnetplot(ego, categorySize="pvalue", showCategory = 10, color.params = list(foldChange = OE_foldchanges), category_label = 0.5, gene_label = 0.5, vertex.label.font=0.05, max.overlaps = 25)
-dev.off()
 
-## If some of the high fold changes are getting drowned out due to a large range, you could set a maximum fold change value
+# Check if there are enough significant genes for cnetplot
+if (length(OE_foldchanges) > 5) {  # Ensure enough genes with significant fold changes
+  # Cnetplot details the genes associated with one or more terms
+  pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Category_Netplot_All_Genes_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
+  cnetplot(ego, categorySize="pvalue", showCategory = 10, color.params = list(foldChange = OE_foldchanges), category_label = 0.5, gene_label = 0.5, vertex.label.font=0.05, max.overlaps = 25)
+  dev.off()
+} else {
+  message("Not enough significant genes for category netplot. Skipping...")
+}
+
+# If some of the high fold changes are getting drowned out due to a large range, you could set a maximum fold change value
 OE_foldchanges <- ifelse(OE_foldchanges > 2, 2, OE_foldchanges)
 OE_foldchanges <- ifelse(OE_foldchanges < -2, -2, OE_foldchanges)
 
-pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Category_Netplot_Filter_by_2_FoldChanges_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
-cnetplot(ego, categorySize="pvalue", showCategory = 10, color.params = list(foldChange = OE_foldchanges), category_label = 0.5, gene_label = 0.5, vertex.label.font=0.05, max.overlaps = 25)
-dev.off()
-
+# Check if there are enough genes for filtered cnetplot
+if (length(OE_foldchanges) > 5) {  # Ensure enough genes for plotting
+  pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Category_Netplot_Filter_by_2_FoldChanges_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
+  cnetplot(ego, categorySize="pvalue", showCategory = 10, color.params = list(foldChange = OE_foldchanges), category_label = 0.5, gene_label = 0.5, vertex.label.font=0.05, max.overlaps = 25)
+  dev.off()
+} else {
+  message("Not enough genes for filtered category netplot. Skipping...")
+}
 
 ## GSEA analysis with clusterProfiler
 # Functional class scoring (FCS) tools, such as GSEA, most often use the gene-level statistics or log2 fold changes for all genes from the differential expression results
