@@ -164,7 +164,7 @@ library(apeglm)
 # Need to figure out how to allow complex design like ~ cell+condition+cell:condition
 
 if (is.null(covariable)) {
-  print("No covarialbe")
+  print("No covariable")
 	DESeq2Model <-  paste("~ ",Condition2Compare)
 }else{
 	DESeq2Model <-  paste("~ ",Condition2Compare," + ",covariable)
@@ -239,6 +239,7 @@ dev.off()
 # For example, include other sources of variation (if the info is in the sample_table) using
 # "dds <- DESeqDataSetFromTximport(txi, colData = meta, design = ~ covariable + condition)"
 # Run DESeq2 differential expression analysis 
+message('DESeq2')
 dds <- DESeq(dds)
 resultsNames(dds)  # Check the default group comparison
 normalized_counts <- counts(dds, normalized=TRUE)
@@ -337,6 +338,7 @@ dev.off()
 # This function reports the number of genes up- and down-regulated at the selected threshold (padj/alpha), the number of genes that were tested (genes with non-zero total read count), and the number of genes not included in multiple test correction due to a low mean count
 
 # Turn the results object into a tibble for use with tidyverse functions
+message('Save DESeq2 raw results')
 res_tbl <- res %>%
   data.frame() %>%
   rownames_to_column(var="gene") %>% 
@@ -370,8 +372,9 @@ write.table(sig_res_05_LFCminus1, paste(FolderOutput ,"/FoldChanges/DEgenes_sigr
 
 ### Step 8 ### Visualize results: volcano plots, heatmaps, normalized counts plots of top genes...
 ## 1 # Create reports from DESeq2 results with RegionReport = HTML and PDF Report with visualization plots
+message('Region report start')
 regionreport <- DESeq2Report(dds, project = "DE report with RegionReport", res=res, intgroup = Condition2Compare, outdir = FolderOutput, output = paste("RegionReport_",level_to_compare,"_vs_",base_level, sep = ""))
-
+message('Region report done')
 ## if res=NULL, then results will be used on dds with default parameters (last condition vs first condition). 
 
 ## 2 # Plotting significant DE genes
@@ -450,6 +453,7 @@ mat  <- mat - rowMeans(mat)
 heatmaply(mat, file =  paste(FolderOutput ,"HeatMap_Top",topheatgene,"_genes_",level_to_compare,"_vs_",base_level,".html", sep = ""), scale_fill_gradient_fun = ggplot2::scale_fill_gradient2(low = "blue", high = "red", midpoint = 0, limits = c(-4, 4), ))
 
 ## 4 # Volcano plot (EnhancedVolcano)
+message('Volcano plots')
 pdf(file= paste(FolderOutput ,"/Plots/DE_Volcanoplot_All_Genes_",level_to_compare,"_vs_",base_level,".pdf", sep = ""))
 EnhancedVolcano(sig_res_01,
                 lab = sig_res_01$gene,
@@ -498,6 +502,7 @@ dev.off()
 ## 1 # Gene Ontology (GO) over-representation analysis with clusterProfiler
 
 # Load libraries
+message('clusterProfiler')
 suppressPackageStartupMessages({
 library(DOSE)
 library(pathview)
@@ -526,6 +531,7 @@ sigOE_genes <- as.character(sig_res_01$gene)
 #sigOE_genes <- as.character(sig_res_05$gene)
 
 ## Run GO enrichment analysis (significant OE genes within universal OE genes)
+message('GO analysis')
 ego <- enrichGO(gene = sigOE_genes, 
                 universe = allOE_genes,
                 keyType = "SYMBOL",
@@ -560,8 +566,9 @@ write.csv(as.data.frame(cluster_summary), file= paste(FolderOutput ,"/GSEA/GO_Cl
 
 
 ## Visualize clusterProfiler results
-pdf(file = paste(FolderOutput ,"/GSEA/GO_ClusterProfiler_Dotplot_Top",topgene,level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
-dotplot(ego, showCategory=topgene, font.size = 8)
+message('Ploting Cluster Profiler results')
+pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Dotplot_Top",topgene,level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
+dotplot(ego, showCategory=topgene, font.size = 12)
 dev.off()
 
 # Enrichmap #
@@ -569,7 +576,7 @@ dev.off()
 ego <- enrichplot::pairwise_termsim(ego)
 # Enrichmap clusters the x most significant (by padj) GO terms to visualize relationships between terms
 pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Enrichmap_Top_",topgene,"_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
-emapplot(ego, showCategory = topgene, cex.params = list(category_label = 0.5, line = 0.25))
+emapplot(ego, showCategory = topgene, category_label = 0.5, line = 0.25)
 dev.off()
 
 # Category netplot #
@@ -578,16 +585,16 @@ sigOE <- dplyr::filter(res_ids, padj < 0.01)
 OE_foldchanges <- sigOE$log2FoldChange
 names(OE_foldchanges) <- sigOE$gene
 # Cnetplot details the genes associated with one or more terms - by default gives the top 5 significant terms (by padj)
-pdf(file = paste(FolderOutput ,"/GSEA/GO_Clusterprofiler_Category_Netplot_All_Genes_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
-cnetplot(ego, categorySize="pvalue", showCategory = 10, color.params = list(foldChange = OE_foldchanges), cex.params = list(category_label = 0.5, gene_label = 0.5), vertex.label.font=0.05, max.overlaps = 25)
+pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Category_Netplot_All_Genes_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
+cnetplot(ego, categorySize="pvalue", showCategory = 10, color.params = list(foldChange = OE_foldchanges), category_label = 0.5, gene_label = 0.5, vertex.label.font=0.05, max.overlaps = 25)
 dev.off()
 
 ## If some of the high fold changes are getting drowned out due to a large range, you could set a maximum fold change value
 OE_foldchanges <- ifelse(OE_foldchanges > 2, 2, OE_foldchanges)
 OE_foldchanges <- ifelse(OE_foldchanges < -2, -2, OE_foldchanges)
 
-pdf(file = paste(FolderOutput ,"/GSEA/GO_Clusterprofiler_Category_Netplot_Filter_by_2_FoldChanges_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
-cnetplot(ego, categorySize="pvalue", showCategory = 10, color.params = list(foldChange = OE_foldchanges), cex.params = list(category_label = 0.5, gene_label = 0.5), vertex.label.font=0.05, max.overlaps = 25)
+pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Category_Netplot_Filter_by_2_FoldChanges_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
+cnetplot(ego, categorySize="pvalue", showCategory = 10, color.params = list(foldChange = OE_foldchanges), category_label = 0.5, gene_label = 0.5, vertex.label.font=0.05, max.overlaps = 25)
 dev.off()
 
 
@@ -598,7 +605,7 @@ dev.off()
 # https://software.broadinstitute.org/cancer/software/gsea/wiki/index.php/Using_RNA-seq_Datasets_with_GSEA
 # https://github.com/hbctraining/DGE_workshop_salmon_online/blob/master/lessons/10_FA_over-representation_analysis.md
 
-# Preparation for GSEA
+message('GSEA')
 # To use the KEGG gene sets, we need to acquire Entrez IDs and remove NA values and duplicates
 # Remove any NA values
 res_entrez <- dplyr::filter(res_ids, entrezid != "NA")
@@ -625,7 +632,7 @@ gseaKEGG <- gseKEGG(geneList = foldchanges, # ordered named vector of fold chang
 
 write.csv(as.data.frame(gseaKEGG), file= paste(FolderOutput ,"/KEGG/KEGG_Results_",level_to_compare,"_vs_",base_level,".csv", sep = ""))
 
-# Print pathways
+message('Print KEGG pathways')
 gseaKEGG_results <- gseaKEGG@result
 
 ## Output images for all significant KEGG pathways
@@ -658,8 +665,9 @@ errors <- purrr::map(results, "error")  # To see which pathways had errors
 
 # The SPIA (Signaling Pathway Impact Analysis) tool can be used to integrate the lists of differentially expressed genes, their fold changes, and pathway
 # topology to identify affected pathways.
-suppressPackageStartupMessages(library(SPIA))
 
+message('SPIA')
+suppressPackageStartupMessages(library(SPIA))
 # Significant genes is a vector of fold changes where the names are ENTREZ gene IDs. The background set is a vector of all the genes represented on the platform.
 background_entrez <- res_entrez$entrezid
 sig_res_entrez <- res_entrez[which(res_entrez$padj < 0.05), ] # using p value of 0.05
@@ -693,4 +701,5 @@ plotP_fork(spia_result) # we can specify other threshold value
 dev.off()
 
 ### Output the versions of all tools used in the DE analysis
+message('All done')
 sessionInfo()
