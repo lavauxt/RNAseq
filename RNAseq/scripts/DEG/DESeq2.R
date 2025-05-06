@@ -695,7 +695,7 @@ write.csv(as.data.frame(spia_result), file= paste(FolderOutput ,"/SPIA/Spia_Resu
 # Plot SPIA results
 # In this plot, each pathway is a point and the coordinates are the log of pNDE (using a hypergeometric model) and the p-value from perturbations, pPERT. The
 # oblique lines in the plot show the significance regions based on the combined evidence
-source('SPIA_plot_fork.R')
+source("/app/scripts/DEG/SPIA_plot_fork.R")
 pdf(file = paste(FolderOutput ,"/SPIA/SPIA_Plot_Results_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
 plotP_fork(spia_result) # we can specify other threshold value
 dev.off()
