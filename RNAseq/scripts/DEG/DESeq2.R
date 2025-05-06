@@ -564,19 +564,18 @@ write.csv(as.data.frame(cluster_summary), file= paste(FolderOutput ,"/GSEA/GO_Cl
 #cluster_summary_2fold <- as.data.frame(ego2fold)
 #write.csv(as.data.frame(cluster_summary_2fold), file= paste(FolderOutput ,"/GSEA/GO_ClusterProfiler_2Fold_",level_to_compare,"_vs_",base_level,".csv", sep = ""))
 
-
 ## Visualize clusterProfiler results
 message('Ploting Cluster Profiler results')
 pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Dotplot_Top",topgene,level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
-dotplot(ego, showCategory=topgene, font.size = 12)
+dotplot(ego, showCategory=topgene, font.size = 10)
 dev.off()
 
 # Enrichmap #
-# Add similarity matrix to the termsim slot of enrichment result
+# Add similarity matrix to the terms in slot of enrichment result
 ego <- enrichplot::pairwise_termsim(ego)
 # Enrichmap clusters the x most significant (by padj) GO terms to visualize relationships between terms
 pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Enrichmap_Top_",topgene,"_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
-emapplot(ego, showCategory = topgene, category_label = 0.5, line = 0.25)
+emapplot(ego, showCategory = topgene)
 dev.off()
 
 # Category netplot #
@@ -632,7 +631,7 @@ gseaKEGG <- gseKEGG(geneList = foldchanges, # ordered named vector of fold chang
 
 write.csv(as.data.frame(gseaKEGG), file= paste(FolderOutput ,"/KEGG/KEGG_Results_",level_to_compare,"_vs_",base_level,".csv", sep = ""))
 
-message('Print KEGG pathways')
+message('KEGG pathways')
 gseaKEGG_results <- gseaKEGG@result
 
 ## Output images for all significant KEGG pathways
