@@ -230,24 +230,6 @@ pdf(file = paste(FolderOutput ,"HeatMap_",level_to_compare,"_vs_",base_level,".p
 pheatmap(rld_cor, annotation = meta)
 dev.off()
 
-# TF analysis
-suppressPackageStartupMessages({
-library(enrichR)
-})
-message('Transcription factors analysis')
-# Run enrichment analysis for transcription factor-related databases
-enrichr_results <- enrichr(dds, databases = c("Transcriptional_Regulators", "ChEA_2016"))
-
-# View results
-head(enrichr_results$Transcriptional_Regulators)
-
-# Save Enrichr results in a CSV file (for Transcriptional_Regulators database)
-write.table(enrichr_results$Transcriptional_Regulators, 
-            file = paste(FolderOutput, "/Transcription Factors/Enrichr_Transcriptional_Regulators_results.csv", sep = ""), 
-            sep = ",", quote = FALSE, row.names = FALSE, col.names = TRUE)
-
-message('Transcritpion factors analysis done')
-
 ###########################################################
 ### Step 4 ### Differential expression analysis with DESeq2
 # **Optional step** - Re-create DESeq2 dataset if the design formula has changed after QC analysis
@@ -514,6 +496,26 @@ allOE_genes <- as.character(res_ids$gene)
 sigOE_genes <- as.character(sig_res_01$gene)
 #sigOE_genes <- as.character(sig_res_05$gene)
 
+# TF analysis with enrichR
+# Run enrichment analysis for transcription factor-related databases using ChEA_2022
+suppressPackageStartupMessages({
+library(enrichR)
+})
+message('Transcription factors analysis')
+websiteLive <- getOption("enrichR.live")
+if (websiteLive) {
+    enrichr_results_unf <- enrichr(sigOE_genes, databases = ("ChEA_2022"))
+    combined_enrichr_results_unf <- bind_rows(enrichr_results_unf)
+  
+  combined_enrichr_results <- combined_enrichr_results_unf %>%
+    filter(!grepl("Mouse", Term))
+  
+  write.table(combined_enrichr_results , 
+                file = paste(FolderOutput, "/Transcription Factors/Enrichr_Transcriptional_Regulators_results.csv", sep = ""), 
+                sep = ",", quote = FALSE, row.names = FALSE, col.names = TRUE)
+message('Transcription factors analysis done')
+}
+
 ## Run GO enrichment analysis (significant OE genes within universal OE genes)
 message('GO analysis')
 ego <- enrichGO(gene = sigOE_genes, 
@@ -537,6 +539,7 @@ if (length(ego@result$ID) > 5) {  # Set a threshold (e.g., 5 categories or genes
 } else {
   message("Not enough genes for dotplot. Skipping...")
 }
+
 
 # Enrichmap #
 # Add similarity matrix to the terms in slot of enrichment result
@@ -671,7 +674,7 @@ save(
   AllDEgenes_norm,
   topx_sigOE_final,
   topx_sigOE_norm,
-  enrichr_results,
+  combined_enrichr_results,
   res_tableOE_unshrunken,
   res_tableOE_shrunken,
   res,
