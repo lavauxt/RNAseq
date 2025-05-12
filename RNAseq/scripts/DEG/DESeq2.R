@@ -71,7 +71,7 @@ replicate = opt$replicate
 ### STEP 1 ### Setup to import datas into proper files
 # Create directories
 dir.create(FolderOutput)
-subdirs <- c("Counts", "FoldChanges", "Plots", "KEGG", "GSEA", "SPIA", "QC", "Databases", "Log")
+subdirs <- c("Counts", "FoldChanges", "Plots", "KEGG", "GSEA", "SPIA", "QC", "Databases", "Log", "Transcription Factors")
 sapply(subdirs, function(subdir) dir.create(file.path(FolderOutput, subdir)))
 
 # Extracting samples from sample_table
@@ -178,12 +178,9 @@ if (is.null(interaction)) {
 
 print("Modele is")
 print(DESeq2Model)
-
 dds <- DESeqDataSetFromTximport(txi, colData = meta, design = as.formula(DESeq2Model))
-
 # Specify the base level
 dds$condition <- relevel( dds$condition, paste(base_level))
-
 ## Pre-filtering the dataset (dds object) before DE analysis
 ## Delete row if 0 counts for all samples
 keep <- rowSums(counts(dds)) >= 1 # Keep if sum of row values >= 1 
@@ -232,6 +229,24 @@ rld_cor <- cor(rld_mat)
 pdf(file = paste(FolderOutput ,"HeatMap_",level_to_compare,"_vs_",base_level,".pdf", sep = ""))
 pheatmap(rld_cor, annotation = meta)
 dev.off()
+
+# TF analysis
+suppressPackageStartupMessages({
+library(enrichR)
+})
+message('Transcription factors analysis')
+# Run enrichment analysis for transcription factor-related databases
+enrichr_results <- enrichr(dds, databases = c("Transcriptional_Regulators", "ChEA_2016"))
+
+# View results
+head(enrichr_results$Transcriptional_Regulators)
+
+# Save Enrichr results in a CSV file (for Transcriptional_Regulators database)
+write.table(enrichr_results$Transcriptional_Regulators, 
+            file = paste(FolderOutput, "/Transcription Factors/Enrichr_Transcriptional_Regulators_results.csv", sep = ""), 
+            sep = ",", quote = FALSE, row.names = FALSE, col.names = TRUE)
+
+message('Transcritpion factors analysis done')
 
 ###########################################################
 ### Step 4 ### Differential expression analysis with DESeq2
@@ -470,39 +485,9 @@ EnhancedVolcano(sig_res_01,
                 colAlpha = 1)
 dev.off()
 
-# TODO list of gene should be an arguement
-#pdf(file= paste(FolderOutput ,"/Plots/DE_Volcanoplot_Selection_of_Genes.pdf", sep = ""))
-#EnhancedVolcano(sig_res_01,
-#                lab = sig_res_01$gene,
-#                x = 'log2FoldChange',
-#                y = 'pvalue',
-#                title = 'DE_Volcanoplot_Selection_of_Genes',
-#                selectLab = c('TLR1','TLR2','TLR3','TLR4', 'TLR5', 'TLR6', 'TLR7', 'TLR8', 'TLR9', 'TLR10', 'CD180', 'LY86', 'LY96', 'NFKB1', 'NFKBIA', 'NFKBID'),
-#                pCutoff = 0.01,
-#                FCcutoff = 1.0,
-#                cutoffLineType = 'twodash',
-#                cutoffLineWidth = 0.8,
-#                pointSize = 1.0,
-#                labSize = 3.0,
-#                labCol = 'black',
-#                labFace = 'bold',
-#                col=c('grey', 'grey', 'grey', 'red2'),
-#                colAlpha = 0.75,
-#                legendLabels=c('NS','Log FC','p-value',
-#                               'p-value & Log FC'),
-#                legendPosition = 'right',
-#                legendLabSize = 10,
-#                legendIconSize = 5.0,
-#                drawConnectors = TRUE,
-#                widthConnectors = 1.0,
-#                colConnectors = 'black')
-#dev.off()
-
-
 ### Step 9 ### Functional analysis: GO over-representation, GSEA with clusterProfiler
 ## 1 # Gene Ontology (GO) over-representation analysis with clusterProfiler
 
-# Load libraries
 message('clusterProfiler')
 suppressPackageStartupMessages({
 library(DOSE)
@@ -519,9 +504,7 @@ annotations_ahb <- genes(edb, return.type = "data.frame")  %>%
 annotations_ahb$entrezid <- map(annotations_ahb$entrezid,1) %>%  unlist()
 # Determine the indices for the non-duplicated genes
 non_duplicates_idx <- which(duplicated(annotations_ahb$gene_name) == FALSE)
-# Return only the non-duplicated genes using indices
 annotations_ahb <- annotations_ahb[non_duplicates_idx, ]
-# Save annotations_ahb
 write.csv(as.data.frame(annotations_ahb), file= paste(FolderOutput ,"/Databases/Annotations_ahb_v107.csv", sep = ""))
 ## Merge the AnnotationHub dataframe with the results 
 res_ids <- left_join(res_tbl, annotations_ahb, by=c("gene"="gene_name"))
@@ -542,32 +525,10 @@ ego <- enrichGO(gene = sigOE_genes,
                 qvalueCutoff = 0.05, 
                 readable = F)
 
-## Output results from GO analysis to a table
 cluster_summary <- as.data.frame(ego)
 write.csv(as.data.frame(cluster_summary), file= paste(FolderOutput ,"/GSEA/GO_ClusterProfiler_",level_to_compare,"_vs_",base_level,".csv", sep = ""))
 
-
-## Run GO enrichment analysis for 2 fold changes only (not very accurate statistically speaking)
-#sigOE_genes_2fold <- as.character(sig_res_01_LFC1$gene)
-#sigOE_genes_2fold <- as.character(sig_res_01_LFCminus1$gene)
-
-# Run GO enrichment analysis (significant OE genes 2 fold within universal OE genes)
-#ego2fold <- enrichGO(gene = sigOE_genes_2fold, 
-#                universe = allOE_genes,
-#                keyType = "SYMBOL",
-#                OrgDb = org.Hs.eg.db, 
-#                ont = "BP", 
-#                pAdjustMethod = "BH", 
-#                qvalueCutoff = 0.05, 
-#                readable = F)
-
-## Output results from GO analysis to a table
-#cluster_summary_2fold <- as.data.frame(ego2fold)
-#write.csv(as.data.frame(cluster_summary_2fold), file= paste(FolderOutput ,"/GSEA/GO_ClusterProfiler_2Fold_",level_to_compare,"_vs_",base_level,".csv", sep = ""))
-
-## Visualize clusterProfiler results
 message('Plotting Cluster Profiler results')
-
 # Check if there are enough genes for dotplot
 if (length(ego@result$ID) > 5) {  # Set a threshold (e.g., 5 categories or genes)
   pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Dotplot_Top",topgene,level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
@@ -580,8 +541,6 @@ if (length(ego@result$ID) > 5) {  # Set a threshold (e.g., 5 categories or genes
 # Enrichmap #
 # Add similarity matrix to the terms in slot of enrichment result
 ego <- enrichplot::pairwise_termsim(ego)
-
-# Check if there are enough genes for emapplot
 if (length(ego@result$ID) > 5) {  # Check for the minimum number of terms to plot
   pdf(file = paste(FolderOutput ,"/GSEA/GO_Cluster_Profiler_Enrichmap_Top_",topgene,"_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
   emapplot(ego, showCategory = topgene)
@@ -628,23 +587,13 @@ if (length(OE_foldchanges) > 5) {  # Ensure enough genes for plotting
 
 message('GSEA')
 # To use the KEGG gene sets, we need to acquire Entrez IDs and remove NA values and duplicates
-# Remove any NA values
 res_entrez <- dplyr::filter(res_ids, entrezid != "NA")
-# Remove any Entrez duplicates
 res_entrez <- res_entrez[which(duplicated(res_entrez$entrezid) == F), ]
-
-# Write a table with all datas
 write.csv(as.data.frame(res_entrez), file= paste(FolderOutput ,"/GSEA/Genes_DE_for_GSEA_",level_to_compare,"_vs_",base_level,".csv", sep = ""))
-# Extract the foldchanges
 foldchanges <- res_entrez$log2FoldChange
-# Name each fold change with the corresponding Entrez ID
 names(foldchanges) <- res_entrez$entrezid
-# Sort fold changes in decreasing order
 foldchanges <- sort(foldchanges, decreasing = TRUE)
-
-# First, we will set the seed so that we all obtain the same result:
 set.seed(123456)
-## GSEA using gene sets from KEGG pathways
 gseaKEGG <- gseKEGG(geneList = foldchanges, # ordered named vector of fold changes (Entrez IDs are the associated names)
                     organism = "hsa", # hsa for Homo Sapiens
                     minGSSize = 5, # minimum gene set size (# genes in set) - change to test more sets or recover sets with fewer genes default 5
@@ -655,9 +604,7 @@ write.csv(as.data.frame(gseaKEGG), file= paste(FolderOutput ,"/KEGG/KEGG_Results
 
 message('KEGG pathways')
 gseaKEGG_results <- gseaKEGG@result
-
-## Output images for all significant KEGG pathways
-# Define a safe version of get_kegg_plots using purrr::safely
+## Output images for all significant KEGG pathways, safe version of get_kegg_plots using purrr::safely
 safe_get_kegg_plots <- purrr::safely(function(x) {
    pathview(gene.data = foldchanges, 
             pathway.id = gseaKEGG_results$ID[x], 
@@ -666,27 +613,12 @@ safe_get_kegg_plots <- purrr::safely(function(x) {
             kegg.dir = paste(FolderOutput, "/KEGG/", sep = ""))
 })
 
-# Filter out specific KEGG pathways
-#gseaKEGG_results <- gseaKEGG_results %>%
-#  dplyr::filter(!rownames(gseaKEGG_results) %in% c(
-#    'hsa04215', 'hsa05206', 'hsa01240', 'hsa01200', 
-#    'hsa01230', 'hsa01212', 'hsa01210', 'hsa01232', 
-#    'hsa01250', 'hsa01040'))
-
-# Set working directory
 setwd(paste(FolderOutput, "/KEGG/", sep = ""))
-
-# Map over the pathway IDs safely
 results <- purrr::map(1:length(gseaKEGG_results$ID), safe_get_kegg_plots)
-
-# Optionally, you can inspect errors in results by checking:
-errors <- purrr::map(results, "error")  # To see which pathways had errors
-
-# clusterProfiler::GSEA
+errors <- purrr::map(results, "error")  # you can inspect errors in results by checking
 
 # The SPIA (Signaling Pathway Impact Analysis) tool can be used to integrate the lists of differentially expressed genes, their fold changes, and pathway
 # topology to identify affected pathways.
-
 message('SPIA')
 suppressPackageStartupMessages(library(SPIA))
 # Significant genes is a vector of fold changes where the names are ENTREZ gene IDs. The background set is a vector of all the genes represented on the platform.
@@ -720,6 +652,36 @@ source("/app/scripts/DEG/SPIA_plot_fork.R")
 pdf(file = paste(FolderOutput ,"/SPIA/SPIA_Plot_Results_",level_to_compare,"_vs_",base_level,".pdf", sep = ""), width = 12, height = 14)
 plotP_fork(spia_result) # we can specify other threshold value
 dev.off()
+
+
+# Save all relevant tables as .RData files
+save(
+  sample_table,
+  tximport_file_list,
+  tx2gene,
+  txi,
+  normalized_counts,
+  res_tbl,
+  sig_res_01,
+  sig_res_05,
+  sig_res_01_LFC1,
+  sig_res_01_LFCminus1,
+  sig_res_05_LFC1,
+  sig_res_05_LFCminus1,
+  AllDEgenes_norm,
+  topx_sigOE_final,
+  topx_sigOE_norm,
+  enrichr_results,
+  res_tableOE_unshrunken,
+  res_tableOE_shrunken,
+  res,
+  res_ids,
+  ego,
+  file = paste(FolderOutput, "/Results_", level_to_compare, "_vs_", base_level, ".RData", sep = "")
+)
+
+message("RData files saved successfully.")
+
 
 ### Output the versions of all tools used in the DE analysis
 message('All done')

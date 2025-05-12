@@ -40,11 +40,12 @@ RUN mamba install -y -c conda-forge -c bioconda -c biobuilds -c bih-cubi \
 	r-pheatmap bioconductor-degreport r-heatmaply bioconductor-enhancedvolcano  \
 	bioconductor-genefilter  bioconductor-reportingtools bioconductor-regionreport \
 	bioconductor-pcaexplorer bioconductor-apeglm  bioconductor-dose \
-	bioconductor-pathview  bioconductor-clusterprofiler bioconductor-spia \
+	bioconductor-pathview  bioconductor-clusterprofiler bioconductor-spia r-enrichr \
 	&& mamba clean -afy
 
 # r-monocle3  r-harmony r-seuratwrappers r-seuratdisk bioconductor-scrnaseq \
 # bioconductor-glmgampoi r-presto bioconductor-biomart \
+# bioconductor-tfea.chip
 
 # To activate the environnement use : mamba/conda activate scdblfinder
 # To deactivate use : mamba deactivate
